@@ -37,11 +37,11 @@ type TeacherProfileValues = z.infer<typeof teacherProfileSchema>;
 
 interface ProfileFormProps {
   role: 'student' | 'teacher';
-  onSubmit: (formData: any) => Promise<void>;
+  onSave: (formData: any) => Promise<void>;
   isLoading: boolean;
 }
 
-const ProfileForm = ({ role, onSubmit, isLoading }: ProfileFormProps) => {
+const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
   const { user, studentProfile, teacherProfile } = useAuth();
   
   // Use appropriate form based on role
@@ -103,7 +103,7 @@ const ProfileForm = ({ role, onSubmit, isLoading }: ProfileFormProps) => {
       <CardContent>
         {role === 'student' ? (
           <Form {...studentForm}>
-            <form onSubmit={studentForm.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={studentForm.handleSubmit(onSave)} className="space-y-4">
               <FormField
                 control={studentForm.control}
                 name="fullName"
@@ -209,7 +209,7 @@ const ProfileForm = ({ role, onSubmit, isLoading }: ProfileFormProps) => {
           </Form>
         ) : (
           <Form {...teacherForm}>
-            <form onSubmit={teacherForm.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={teacherForm.handleSubmit(onSave)} className="space-y-4">
               <FormField
                 control={teacherForm.control}
                 name="fullName"

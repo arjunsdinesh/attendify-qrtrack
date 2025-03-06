@@ -6,7 +6,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { toast } from 'sonner';
-import { QRCodeSVG } from 'react-qr-code';
+import QRCode from 'react-qr-code';
 
 interface QRCodeGeneratorProps {
   sessionId: string;
@@ -198,7 +198,7 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
             />
             <div className="bg-white rounded-xl p-2 relative z-10 qr-refresh-animation">
               {qrValue ? (
-                <QRCodeSVG 
+                <QRCode 
                   value={qrValue}
                   size={200}
                   style={{ height: 'auto', maxWidth: '100%', width: '100%' }}

@@ -22,6 +22,23 @@ interface AttendanceRecord {
   class_info: ClassInfo;
 }
 
+interface SessionData {
+  id: string;
+  class_id: string;
+  start_time: string;
+  classes: {
+    id: string;
+    name: string;
+    course_code: string;
+  };
+}
+
+interface AttendanceData {
+  id: string;
+  timestamp: string;
+  attendance_sessions: SessionData;
+}
+
 const AttendanceHistory = ({ userId }: { userId: string }) => {
   const [loading, setLoading] = useState(true);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -74,7 +91,7 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
       if (error) throw error;
       
       // Transform the data to the expected format
-      const formattedData = data.map(record => ({
+      const formattedData = data.map((record: AttendanceData) => ({
         id: record.id,
         date: record.timestamp,
         class_id: record.attendance_sessions.class_id,
