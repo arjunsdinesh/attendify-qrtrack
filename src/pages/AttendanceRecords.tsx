@@ -20,7 +20,7 @@ const AttendanceRecords = () => {
   const [selectedSession, setSelectedSession] = useState<string>('');
   const [records, setRecords] = useState<any[]>([]);
   
-  if (!user || user.user_metadata.role !== 'teacher') {
+  if (!user || user.role !== 'teacher') {
     navigate('/');
     return null;
   }
@@ -143,7 +143,7 @@ const AttendanceRecords = () => {
         
         {loading ? (
           <div className="flex justify-center p-8">
-            <LoadingSpinner size="large" />
+            <LoadingSpinner className="h-8 w-8" />
           </div>
         ) : records.length > 0 ? (
           <Card>

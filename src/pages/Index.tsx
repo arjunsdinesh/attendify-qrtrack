@@ -9,13 +9,13 @@ import AuthForm from '@/components/auth/AuthForm';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const Index = () => {
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
   const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="large" />
+        <LoadingSpinner className="h-8 w-8" />
       </div>
     );
   }
@@ -53,7 +53,7 @@ const Index = () => {
   // User is authenticated, redirect to their respective dashboard
   return (
     <DashboardLayout>
-      {user.user_metadata.role === 'teacher' ? (
+      {user.role === 'teacher' ? (
         <TeacherDashboard />
       ) : (
         <StudentDashboard />

@@ -15,7 +15,7 @@ const AttendanceHistory = () => {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<any[]>([]);
   
-  if (!user || user.user_metadata.role !== 'student') {
+  if (!user || user.role !== 'student') {
     navigate('/');
     return null;
   }
@@ -81,7 +81,7 @@ const AttendanceHistory = () => {
           <CardContent>
             {loading ? (
               <div className="flex justify-center p-8">
-                <LoadingSpinner size="large" />
+                <LoadingSpinner className="h-8 w-8" />
               </div>
             ) : records.length > 0 ? (
               <div>

@@ -10,7 +10,7 @@ const StudentDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  if (!user || user.user_metadata.role !== 'student') {
+  if (!user || user.role !== 'student') {
     return null;
   }
 

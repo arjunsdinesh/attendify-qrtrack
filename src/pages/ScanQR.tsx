@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
-import { QrScanner } from '@yudiel/react-qr-scanner';
+import { Scanner } from '@yudiel/react-qr-scanner';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
 
@@ -17,7 +17,7 @@ const ScanQR = () => {
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   
-  if (!user || user.user_metadata.role !== 'student') {
+  if (!user || user.role !== 'student') {
     navigate('/');
     return null;
   }
@@ -135,7 +135,7 @@ const ScanQR = () => {
           <CardContent className="flex flex-col items-center space-y-4">
             {scanning ? (
               <div className="w-full aspect-square rounded-lg overflow-hidden relative">
-                <QrScanner
+                <Scanner
                   onDecode={handleScan}
                   onError={handleError}
                   constraints={{ facingMode: 'environment' }}
@@ -168,7 +168,7 @@ const ScanQR = () => {
               disabled={processing}
             >
               {processing ? (
-                <LoadingSpinner />
+                <LoadingSpinner className="h-4 w-4" />
               ) : (
                 scanning ? 'Cancel Scanning' : (success ? 'Scan Another Code' : 'Start Scanning')
               )}

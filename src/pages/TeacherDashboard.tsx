@@ -10,7 +10,7 @@ const TeacherDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  if (!user || user.user_metadata.role !== 'teacher') {
+  if (!user || user.role !== 'teacher') {
     return null;
   }
 

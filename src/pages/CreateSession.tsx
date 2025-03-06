@@ -22,7 +22,7 @@ const CreateSession = () => {
   const [generating, setGenerating] = useState<boolean>(false);
   const [active, setActive] = useState<boolean>(false);
   
-  if (!user || user.user_metadata.role !== 'teacher') {
+  if (!user || user.role !== 'teacher') {
     navigate('/');
     return null;
   }
@@ -218,7 +218,7 @@ const CreateSession = () => {
                     />
                   ) : (
                     <div className="h-[200px] w-[200px] flex items-center justify-center bg-gray-100">
-                      <LoadingSpinner />
+                      <LoadingSpinner className="h-8 w-8" />
                     </div>
                   )}
                   <div className="absolute -bottom-2 -right-2 bg-primary text-white text-xs px-2 py-1 rounded-full">

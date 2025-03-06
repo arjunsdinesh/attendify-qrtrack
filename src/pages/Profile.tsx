@@ -12,7 +12,7 @@ import ProfileForm from '@/components/profile/ProfileForm';
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
   const [saving, setSaving] = useState(false);
   
   if (!user) {
@@ -32,7 +32,7 @@ const Profile = () => {
           register_number: formData.registerNumber,
           roll_number: formData.rollNumber,
           department: formData.department,
-          role: user.user_metadata.role,
+          role: user.role,
           updated_at: new Date().toISOString()
         });
       
@@ -52,7 +52,7 @@ const Profile = () => {
       <div className="max-w-md mx-auto">
         <Button 
           variant="outline" 
-          onClick={() => navigate(user.user_metadata.role === 'teacher' ? '/teacher' : '/student')} 
+          onClick={() => navigate(user.role === 'teacher' ? '/teacher' : '/student')} 
           className="mb-4"
         >
           ← Back to Dashboard
@@ -66,7 +66,7 @@ const Profile = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm onSubmit={handleSaveProfile} isLoading={saving} />
+            <ProfileForm onSave={handleSaveProfile} isLoading={saving} />
           </CardContent>
         </Card>
       </div>
