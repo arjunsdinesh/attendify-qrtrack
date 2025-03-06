@@ -6,7 +6,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { toast } from 'sonner';
-import { QRCode } from 'react-qrcode';
+import { QRCodeSVG } from 'react-qr-code';
 
 interface QRCodeGeneratorProps {
   sessionId: string;
@@ -198,14 +198,14 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
             />
             <div className="bg-white rounded-xl p-2 relative z-10 qr-refresh-animation">
               {qrValue ? (
-                <QRCode 
+                <QRCodeSVG 
                   value={qrValue}
                   size={200}
                   style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
                 />
               ) : (
                 <div className="h-[200px] w-[200px] flex items-center justify-center bg-gray-100">
-                  <LoadingSpinner />
+                  <LoadingSpinner className="h-8 w-8" />
                 </div>
               )}
             </div>
@@ -236,7 +236,7 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
           className={`w-full ${active ? 'bg-destructive hover:bg-destructive/90' : 'bg-brand-500 hover:bg-brand-600'}`}
           disabled={generating}
         >
-          {generating ? <LoadingSpinner /> : (active ? 'Stop Tracking' : 'Start Tracking')}
+          {generating ? <LoadingSpinner className="h-4 w-4" /> : (active ? 'Stop Tracking' : 'Start Tracking')}
         </Button>
       </CardContent>
     </Card>

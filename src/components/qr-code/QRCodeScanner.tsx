@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
-import { QrScanner } from '@yudiel/react-qr-scanner';
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 const QRCodeScanner = () => {
   const { user } = useAuth();
@@ -16,8 +16,11 @@ const QRCodeScanner = () => {
   const [recentlyMarked, setRecentlyMarked] = useState(false);
 
   // Handle successful QR code scan
-  const handleScan = async (data: string) => {
+  const handleScan = async (result: any) => {
     try {
+      // Extract the data from the scanned QR code
+      const data = result[0]?.rawValue || '';
+      
       if (!user || processing || recentlyMarked) return;
       
       // Prevent multiple quick scans
@@ -125,10 +128,11 @@ const QRCodeScanner = () => {
       <CardContent className="flex flex-col items-center space-y-4">
         {scanning ? (
           <div className="w-full aspect-square rounded-lg overflow-hidden">
-            <QrScanner
-              onDecode={handleScan}
+            <Scanner
+              onScan={handleScan}
               onError={handleError}
-              constraints={{ facingMode: 'environment' }}
+              scanDelay={500}
+              captureOptions={{ facingMode: 'environment' }}
             />
             {processing && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
@@ -155,7 +159,7 @@ const QRCodeScanner = () => {
           disabled={processing || recentlyMarked}
         >
           {processing ? (
-            <LoadingSpinner />
+            <LoadingSpinner className="h-4 w-4" />
           ) : recentlyMarked ? (
             'Attendance Marked ✓'
           ) : (

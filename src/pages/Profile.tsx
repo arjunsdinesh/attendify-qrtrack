@@ -66,7 +66,11 @@ const Profile = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm onSubmit={handleSaveProfile} isLoading={saving} />
+            <ProfileForm 
+              role={user.role as 'student' | 'teacher'}
+              onSubmit={handleSaveProfile} 
+              isLoading={saving} 
+            />
           </CardContent>
         </Card>
       </div>

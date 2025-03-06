@@ -37,9 +37,11 @@ type TeacherProfileValues = z.infer<typeof teacherProfileSchema>;
 
 interface ProfileFormProps {
   role: 'student' | 'teacher';
+  onSubmit: (formData: any) => Promise<void>;
+  isLoading: boolean;
 }
 
-const ProfileForm = ({ role }: ProfileFormProps) => {
+const ProfileForm = ({ role, onSubmit, isLoading }: ProfileFormProps) => {
   const { user, studentProfile, teacherProfile } = useAuth();
   
   // Use appropriate form based on role
@@ -90,75 +92,6 @@ const ProfileForm = ({ role }: ProfileFormProps) => {
     }
   }, [user, studentProfile, teacherProfile, role]);
 
-  // Handle student profile submission
-  const onStudentSubmit = async (values: StudentProfileValues) => {
-    try {
-      if (!user) return;
-      
-      // Update profiles table with basic info
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          full_name: values.fullName,
-        })
-        .eq('id', user.id);
-      
-      if (profileError) throw profileError;
-      
-      // Update student_profiles table with role-specific details
-      const { error: studentError } = await supabase
-        .from('student_profiles')
-        .update({
-          register_number: values.registerNumber,
-          roll_number: values.rollNumber,
-          department: values.department,
-          semester: values.semester,
-        })
-        .eq('id', user.id);
-      
-      if (studentError) throw studentError;
-      
-      toast.success('Profile updated successfully');
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
-    }
-  };
-
-  // Handle teacher profile submission
-  const onTeacherSubmit = async (values: TeacherProfileValues) => {
-    try {
-      if (!user) return;
-      
-      // Update profiles table with basic info
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          full_name: values.fullName,
-        })
-        .eq('id', user.id);
-      
-      if (profileError) throw profileError;
-      
-      // Update teacher_profiles table with role-specific details
-      const { error: teacherError } = await supabase
-        .from('teacher_profiles')
-        .update({
-          employee_id: values.employeeId,
-          department: values.department,
-          designation: values.designation,
-        })
-        .eq('id', user.id);
-      
-      if (teacherError) throw teacherError;
-      
-      toast.success('Profile updated successfully');
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
-    }
-  };
-
   return (
     <Card className="w-full max-w-xl mx-auto">
       <CardHeader>
@@ -170,7 +103,7 @@ const ProfileForm = ({ role }: ProfileFormProps) => {
       <CardContent>
         {role === 'student' ? (
           <Form {...studentForm}>
-            <form onSubmit={studentForm.handleSubmit(onStudentSubmit)} className="space-y-4">
+            <form onSubmit={studentForm.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={studentForm.control}
                 name="fullName"
@@ -268,15 +201,15 @@ const ProfileForm = ({ role }: ProfileFormProps) => {
               <Button 
                 type="submit" 
                 className="w-full bg-brand-500 hover:bg-brand-600"
-                disabled={studentForm.formState.isSubmitting}
+                disabled={isLoading}
               >
-                {studentForm.formState.isSubmitting ? <LoadingSpinner /> : 'Update Profile'}
+                {isLoading ? <LoadingSpinner className="h-4 w-4" /> : 'Update Profile'}
               </Button>
             </form>
           </Form>
         ) : (
           <Form {...teacherForm}>
-            <form onSubmit={teacherForm.handleSubmit(onTeacherSubmit)} className="space-y-4">
+            <form onSubmit={teacherForm.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={teacherForm.control}
                 name="fullName"
@@ -345,9 +278,9 @@ const ProfileForm = ({ role }: ProfileFormProps) => {
               <Button 
                 type="submit" 
                 className="w-full bg-brand-500 hover:bg-brand-600"
-                disabled={teacherForm.formState.isSubmitting}
+                disabled={isLoading}
               >
-                {teacherForm.formState.isSubmitting ? <LoadingSpinner /> : 'Update Profile'}
+                {isLoading ? <LoadingSpinner className="h-4 w-4" /> : 'Update Profile'}
               </Button>
             </form>
           </Form>

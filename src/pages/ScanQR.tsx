@@ -23,8 +23,11 @@ const ScanQR = () => {
   }
 
   // Handle successful QR code scan
-  const handleScan = async (data: string) => {
+  const handleScan = async (result: any) => {
     try {
+      // Extract the data from the scanned QR code
+      const data = result[0]?.rawValue || '';
+      
       if (processing || success) return;
       
       setProcessing(true);
