@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -66,7 +66,7 @@ const Profile = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm onSave={handleSaveProfile} isLoading={saving} />
+            <ProfileForm onSubmit={handleSaveProfile} isLoading={saving} />
           </CardContent>
         </Card>
       </div>

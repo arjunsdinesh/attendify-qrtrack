@@ -20,7 +20,7 @@ const ManageClasses = () => {
   const [newClassName, setNewClassName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   
-  if (!user || user.user_metadata.role !== 'teacher') {
+  if (!user || user.role !== 'teacher') {
     navigate('/');
     return null;
   }
@@ -125,7 +125,7 @@ const ManageClasses = () => {
                   className="w-full"
                   disabled={submitting || !newClassName.trim()}
                 >
-                  {submitting ? <LoadingSpinner /> : 'Create Class'}
+                  {submitting ? <LoadingSpinner className="h-4 w-4" /> : 'Create Class'}
                 </Button>
               </div>
             </DialogContent>
@@ -134,7 +134,7 @@ const ManageClasses = () => {
         
         {loading ? (
           <div className="flex justify-center p-8">
-            <LoadingSpinner size="large" />
+            <LoadingSpinner className="h-8 w-8" />
           </div>
         ) : classes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -195,7 +195,7 @@ const ManageClasses = () => {
                     className="w-full"
                     disabled={submitting || !newClassName.trim()}
                   >
-                    {submitting ? <LoadingSpinner /> : 'Create Class'}
+                    {submitting ? <LoadingSpinner className="h-4 w-4" /> : 'Create Class'}
                   </Button>
                 </div>
               </DialogContent>

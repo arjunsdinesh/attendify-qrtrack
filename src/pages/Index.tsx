@@ -37,10 +37,10 @@ const Index = () => {
                   <TabsTrigger value="teacher">Teacher</TabsTrigger>
                 </TabsList>
                 <TabsContent value="student">
-                  <AuthForm role="student" />
+                  <AuthForm />
                 </TabsContent>
                 <TabsContent value="teacher">
-                  <AuthForm role="teacher" />
+                  <AuthForm />
                 </TabsContent>
               </Tabs>
             </CardContent>

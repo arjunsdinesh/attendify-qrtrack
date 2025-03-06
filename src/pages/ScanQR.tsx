@@ -136,9 +136,10 @@ const ScanQR = () => {
             {scanning ? (
               <div className="w-full aspect-square rounded-lg overflow-hidden relative">
                 <Scanner
-                  onDecode={handleScan}
+                  onScan={handleScan}
                   onError={handleError}
-                  constraints={{ facingMode: 'environment' }}
+                  scanDelay={500}
+                  captureOptions={{ facingMode: 'environment' }}
                 />
                 {processing && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
