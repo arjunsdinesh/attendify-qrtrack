@@ -22,6 +22,7 @@ interface AttendanceRecord {
   class_info: ClassInfo;
 }
 
+// Update the SessionData interface to match the actual data structure
 interface SessionData {
   id: string;
   class_id: string;
@@ -33,10 +34,20 @@ interface SessionData {
   };
 }
 
-interface AttendanceData {
+// Define the structure of the data returned from the Supabase query
+interface SupabaseAttendanceData {
   id: string;
   timestamp: string;
-  attendance_sessions: SessionData;
+  attendance_sessions: {
+    id: string;
+    class_id: string;
+    start_time: string;
+    classes: {
+      id: string;
+      name: string;
+      course_code: string;
+    };
+  };
 }
 
 const AttendanceHistory = ({ userId }: { userId: string }) => {
@@ -91,7 +102,7 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
       if (error) throw error;
       
       // Transform the data to the expected format
-      const formattedData = data.map((record: AttendanceData) => ({
+      const formattedData = (data as SupabaseAttendanceData[]).map(record => ({
         id: record.id,
         date: record.timestamp,
         class_id: record.attendance_sessions.class_id,
@@ -200,7 +211,7 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
             <div>
               <h3 className="text-lg font-medium mb-4">Timeline</h3>
               <div className="space-y-8">
-                {sortedMonths.map(month => (
+                {Object.keys(groupedByMonth).map(month => (
                   <div key={month}>
                     <h4 className="text-md font-medium text-muted-foreground mb-2">{month}</h4>
                     <div className="space-y-2">

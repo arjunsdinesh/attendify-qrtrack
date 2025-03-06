@@ -9,19 +9,33 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
 
+// Define the structure of the data returned from the Supabase query
+interface AttendanceSessionData {
+  id: string;
+  class_name: string;
+  start_time: string;
+  end_time: string;
+}
+
+interface AttendanceRecordData {
+  id: string;
+  timestamp: string;
+  attendance_sessions: AttendanceSessionData;
+}
+
 const AttendanceHistory = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<AttendanceRecordData[]>([]);
   
-  if (!user || user.role !== 'student') {
-    navigate('/');
-    return null;
-  }
-
-  // Load student's attendance records
   useEffect(() => {
+    if (!user || user.role !== 'student') {
+      navigate('/');
+      return;
+    }
+
+    // Load student's attendance records
     const fetchAttendanceHistory = async () => {
       try {
         setLoading(true);
@@ -53,7 +67,7 @@ const AttendanceHistory = () => {
     };
     
     fetchAttendanceHistory();
-  }, [user]);
+  }, [user, navigate]);
 
   // Format date for display
   const formatDate = (dateString: string) => {
