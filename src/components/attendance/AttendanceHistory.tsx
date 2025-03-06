@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,6 @@ import { LoadingSpinner } from '@/components/ui-components';
 import { formatDate } from '@/utils/date-utils';
 import { toast } from 'sonner';
 
-// Define proper types for our data
 interface ClassInfo {
   name: string;
   course_code: string;
@@ -22,32 +20,23 @@ interface AttendanceRecord {
   class_info: ClassInfo;
 }
 
-// Update the SessionData interface to match the actual data structure
+interface ClassData {
+  id: string;
+  name: string;
+  course_code: string;
+}
+
 interface SessionData {
   id: string;
   class_id: string;
   start_time: string;
-  classes: {
-    id: string;
-    name: string;
-    course_code: string;
-  };
+  classes: ClassData;
 }
 
-// Define the structure of the data returned from the Supabase query
 interface SupabaseAttendanceData {
   id: string;
   timestamp: string;
-  attendance_sessions: {
-    id: string;
-    class_id: string;
-    start_time: string;
-    classes: {
-      id: string;
-      name: string;
-      course_code: string;
-    };
-  };
+  attendance_sessions: SessionData;
 }
 
 const AttendanceHistory = ({ userId }: { userId: string }) => {
@@ -82,7 +71,6 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
         .eq('student_id', userId)
         .order('timestamp', { ascending: false });
       
-      // Apply date filters
       const now = new Date();
       if (view === 'today') {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -101,8 +89,10 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
       
       if (error) throw error;
       
-      // Transform the data to the expected format
-      const formattedData = (data as SupabaseAttendanceData[]).map(record => ({
+      const rawData = data as unknown;
+      const typedData = rawData as SupabaseAttendanceData[];
+      
+      const formattedData = typedData.map(record => ({
         id: record.id,
         date: record.timestamp,
         class_id: record.attendance_sessions.class_id,
@@ -121,7 +111,6 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
     }
   };
   
-  // Group records by month for the timeline view
   const groupedByMonth = attendanceRecords.reduce((acc, record) => {
     const date = new Date(record.date);
     const monthYear = `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
@@ -134,7 +123,6 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
     return acc;
   }, {} as Record<string, AttendanceRecord[]>);
   
-  // Sort months chronologically
   const sortedMonths = Object.keys(groupedByMonth).sort((a, b) => {
     const dateA = new Date(a);
     const dateB = new Date(b);

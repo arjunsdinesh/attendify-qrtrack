@@ -23,6 +23,18 @@ interface AttendanceRecordData {
   attendance_sessions: AttendanceSessionData;
 }
 
+// Define the raw data structure as we receive it from Supabase
+interface RawAttendanceRecord {
+  id: string;
+  timestamp: string;
+  attendance_sessions: {
+    id: string;
+    class_name: string;
+    start_time: string;
+    end_time: string;
+  };
+}
+
 const AttendanceHistory = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -57,7 +69,22 @@ const AttendanceHistory = () => {
         
         if (error) throw error;
         
-        setRecords(data || []);
+        // Use proper type assertion
+        const rawData = data as unknown;
+        const typedData = rawData as RawAttendanceRecord[];
+        
+        const formattedRecords: AttendanceRecordData[] = typedData.map(record => ({
+          id: record.id,
+          timestamp: record.timestamp,
+          attendance_sessions: {
+            id: record.attendance_sessions.id,
+            class_name: record.attendance_sessions.class_name,
+            start_time: record.attendance_sessions.start_time,
+            end_time: record.attendance_sessions.end_time
+          }
+        }));
+        
+        setRecords(formattedRecords);
       } catch (error: any) {
         console.error('Error fetching attendance records:', error);
         toast.error('Failed to load attendance history');
