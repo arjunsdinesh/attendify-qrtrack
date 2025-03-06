@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui-components';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Login form schema
 const loginSchema = z.object({
@@ -36,6 +37,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 const AuthForm = () => {
   const { signIn, signUp, loading, initialRole, setInitialRole } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Login form handler
   const loginForm = useForm<LoginFormValues>({
@@ -60,12 +62,22 @@ const AuthForm = () => {
 
   // Handle login submission
   const onLoginSubmit = async (values: LoginFormValues) => {
-    await signIn(values.email, values.password);
+    setFormError(null);
+    try {
+      await signIn(values.email, values.password);
+    } catch (error: any) {
+      setFormError(error.message || 'Failed to sign in. Please check your Supabase configuration.');
+    }
   };
 
   // Handle registration submission
   const onRegisterSubmit = async (values: RegisterFormValues) => {
-    await signUp(values.email, values.password, values.role, values.fullName);
+    setFormError(null);
+    try {
+      await signUp(values.email, values.password, values.role, values.fullName);
+    } catch (error: any) {
+      setFormError(error.message || 'Failed to create account. Please check your Supabase configuration.');
+    }
   };
 
   // Handle role change in registration form
@@ -91,6 +103,12 @@ const AuthForm = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {formError && authMode === 'login' && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
+              )}
               <Form {...loginForm}>
                 <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
                   <FormField
@@ -150,6 +168,12 @@ const AuthForm = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {formError && authMode === 'register' && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
+              )}
               <Form {...registerForm}>
                 <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
                   <FormField

@@ -1,10 +1,10 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
-const supabaseUrl = 'https://your-supabase-url.supabase.co';
+// Replace these placeholder values with actual Supabase URL and anon key
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-supabase-url.supabase.co';
 // Note: This is a public key that can be exposed in the client
-const supabaseAnonKey = 'your-supabase-anon-key';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-supabase-anon-key';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
