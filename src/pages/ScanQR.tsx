@@ -142,7 +142,7 @@ const ScanQR = () => {
                   onScan={handleScan}
                   onError={handleError}
                   scanDelay={500}
-                  captureOptions={{ facingMode: 'environment' }}
+                  constraints={{ facingMode: 'environment' }}
                 />
                 {processing && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
