@@ -6,10 +6,27 @@ import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui-components';
 import AuthForm from '@/components/auth/AuthForm';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { checkSupabaseConnection } from '@/utils/supabase';
+import { toast } from 'sonner';
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [dbConnected, setDbConnected] = useState(true);
+
+  // Check database connection
+  useEffect(() => {
+    const checkConnection = async () => {
+      const connected = await checkSupabaseConnection();
+      setDbConnected(connected);
+      if (!connected) {
+        toast.error('Database connection failed. Please check your configuration.');
+        console.error('Failed to connect to Supabase database.');
+      }
+    };
+    
+    checkConnection();
+  }, []);
 
   // Redirect authenticated users to their dashboard
   useEffect(() => {
@@ -39,6 +56,11 @@ const Index = () => {
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold mb-2">QR Attendance</h1>
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
+                {!dbConnected && (
+                  <p className="text-destructive mt-2">
+                    Database connection error. Please check your configuration.
+                  </p>
+                )}
               </div>
               
               <AuthForm />
