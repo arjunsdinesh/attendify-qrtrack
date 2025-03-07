@@ -3,24 +3,21 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui-components';
 import AuthForm from '@/components/auth/AuthForm';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const Index = () => {
   const { user, loading } = useAuth();
-  const [authTabValue, setAuthTabValue] = useState<'student' | 'teacher'>('student');
   const navigate = useNavigate();
 
   // Redirect authenticated users to their dashboard
   useEffect(() => {
     if (user && !loading) {
       if (user.role === 'student') {
-        navigate('/student-dashboard');
+        navigate('/student');
       } else if (user.role === 'teacher') {
-        navigate('/teacher-dashboard');
+        navigate('/teacher');
       }
     }
   }, [user, loading, navigate]);
@@ -56,59 +53,47 @@ const Index = () => {
   return (
     <DashboardLayout>
       {user.role === 'teacher' ? (
-        <TeacherDashboard />
+        <div className="space-y-6">
+          <h1 className="text-3xl font-bold">Teacher Dashboard</h1>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardContent className="pt-6">
+                <h2 className="text-xl font-semibold mb-4">Create New Session</h2>
+                <p className="text-muted-foreground mb-4">Generate a QR code for your current class session.</p>
+                <button onClick={() => navigate('/create-session')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">Create Session</button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <h2 className="text-xl font-semibold mb-4">View Attendance Records</h2>
+                <p className="text-muted-foreground mb-4">Check attendance records for your classes.</p>
+                <button onClick={() => navigate('/attendance-records')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">View Records</button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       ) : (
-        <StudentDashboard />
+        <div className="space-y-6">
+          <h1 className="text-3xl font-bold">Student Dashboard</h1>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardContent className="pt-6">
+                <h2 className="text-xl font-semibold mb-4">Scan Attendance QR</h2>
+                <p className="text-muted-foreground mb-4">Scan the QR code to mark your attendance.</p>
+                <button onClick={() => navigate('/scan-qr')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">Scan QR Code</button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <h2 className="text-xl font-semibold mb-4">Your Attendance History</h2>
+                <p className="text-muted-foreground mb-4">View your attendance records.</p>
+                <button onClick={() => navigate('/attendance-history')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">View History</button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
     </DashboardLayout>
-  );
-};
-
-const TeacherDashboard = () => {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Teacher Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Create New Session</h2>
-            <p className="text-muted-foreground mb-4">Generate a QR code for your current class session.</p>
-            <Button>Create Session</Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">View Attendance Records</h2>
-            <p className="text-muted-foreground mb-4">Check attendance records for your classes.</p>
-            <Button>View Records</Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-const StudentDashboard = () => {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Student Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Scan Attendance QR</h2>
-            <p className="text-muted-foreground mb-4">Scan the QR code to mark your attendance.</p>
-            <Button>Scan QR Code</Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Your Attendance History</h2>
-            <p className="text-muted-foreground mb-4">View your attendance records.</p>
-            <Button>View History</Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
   );
 };
 
