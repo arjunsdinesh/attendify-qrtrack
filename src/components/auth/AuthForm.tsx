@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,8 +10,10 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui-components';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, WifiOff } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { checkSupabaseConnection } from '@/utils/supabase';
+import { toast } from 'sonner';
 
 // Login form schema
 const loginSchema = z.object({
@@ -38,6 +40,25 @@ const AuthForm = () => {
   const { signIn, signUp, loading, initialRole, setInitialRole } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [formError, setFormError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+
+  // Check Supabase connection on component mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const isConnected = await checkSupabaseConnection();
+        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+        if (!isConnected) {
+          toast.error("Unable to connect to Supabase. Please check your configuration.");
+        }
+      } catch (error) {
+        setConnectionStatus('disconnected');
+        console.error('Connection check failed:', error);
+      }
+    };
+    
+    checkConnection();
+  }, []);
 
   // Login form handler
   const loginForm = useForm<LoginFormValues>({
@@ -62,6 +83,11 @@ const AuthForm = () => {
 
   // Handle login submission
   const onLoginSubmit = async (values: LoginFormValues) => {
+    if (connectionStatus === 'disconnected') {
+      setFormError('Cannot connect to the database. Please check your Supabase configuration.');
+      return;
+    }
+    
     setFormError(null);
     try {
       await signIn(values.email, values.password);
@@ -72,6 +98,11 @@ const AuthForm = () => {
 
   // Handle registration submission
   const onRegisterSubmit = async (values: RegisterFormValues) => {
+    if (connectionStatus === 'disconnected') {
+      setFormError('Cannot connect to the database. Please check your Supabase configuration.');
+      return;
+    }
+    
     setFormError(null);
     try {
       await signUp(values.email, values.password, values.role, values.fullName);
@@ -88,6 +119,15 @@ const AuthForm = () => {
   return (
     <div className="max-w-md w-full mx-auto">
       <Card className="bg-white/95 backdrop-blur-sm border border-border/50 shadow-soft">
+        {connectionStatus === 'disconnected' && (
+          <div className="bg-red-50 p-3 rounded-t-lg border-b border-red-200">
+            <div className="flex items-center text-red-700 text-sm">
+              <WifiOff className="h-4 w-4 mr-2" />
+              <span>Database connection error. Please check your Supabase configuration.</span>
+            </div>
+          </div>
+        )}
+        
         <Tabs value={authMode} onValueChange={(value) => setAuthMode(value as 'login' | 'register')}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>

@@ -1,5 +1,6 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,7 +11,19 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const Index = () => {
   const { user, loading } = useAuth();
-  const [userRole, setUserRole] = useState<'student' | 'teacher'>('student');
+  const [authTabValue, setAuthTabValue] = useState<'student' | 'teacher'>('student');
+  const navigate = useNavigate();
+
+  // Redirect authenticated users to their dashboard
+  useEffect(() => {
+    if (user && !loading) {
+      if (user.role === 'student') {
+        navigate('/student-dashboard');
+      } else if (user.role === 'teacher') {
+        navigate('/teacher-dashboard');
+      }
+    }
+  }, [user, loading, navigate]);
 
   if (loading) {
     return (
@@ -31,18 +44,7 @@ const Index = () => {
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
               </div>
               
-              <Tabs defaultValue="student" onValueChange={(value) => setUserRole(value as 'student' | 'teacher')}>
-                <TabsList className="grid grid-cols-2 mb-4">
-                  <TabsTrigger value="student">Student</TabsTrigger>
-                  <TabsTrigger value="teacher">Teacher</TabsTrigger>
-                </TabsList>
-                <TabsContent value="student">
-                  <AuthForm />
-                </TabsContent>
-                <TabsContent value="teacher">
-                  <AuthForm />
-                </TabsContent>
-              </Tabs>
+              <AuthForm />
             </CardContent>
           </Card>
         </div>
@@ -50,7 +52,7 @@ const Index = () => {
     );
   }
 
-  // User is authenticated, redirect to their respective dashboard
+  // This should not normally be reached due to the useEffect redirect
   return (
     <DashboardLayout>
       {user.role === 'teacher' ? (

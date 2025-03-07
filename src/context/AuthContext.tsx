@@ -132,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast.error(error.message || 'Failed to sign in');
+      throw error; // Rethrow for component-level handling
     } finally {
       setLoading(false);
     }
@@ -141,6 +142,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, role: 'student' | 'teacher', fullName: string) => {
     try {
       setLoading(true);
+      
+      // Validate Supabase connection first
+      const { error: connectionError } = await supabase.from('profiles').select('count').limit(1);
+      if (connectionError) {
+        throw new Error(`Failed to connect to the database: ${connectionError.message}. Please check your Supabase configuration.`);
+      }
       
       // Create auth user
       const { data, error } = await supabase.auth.signUp({
@@ -207,6 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Sign up error:', error);
       toast.error(error.message || 'Failed to create account');
+      throw error; // Rethrow for component-level handling
     } finally {
       setLoading(false);
     }

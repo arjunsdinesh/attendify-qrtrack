@@ -1,12 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
-// Replace these placeholder values with actual Supabase URL and anon key
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-supabase-url.supabase.co';
-// Note: This is a public key that can be exposed in the client
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-supabase-anon-key';
+// Retrieve Supabase URL and anon key from environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Validate config
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.');
+}
+
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder-url.supabase.co', 
+  supabaseAnonKey || 'placeholder-key'
+);
 
 export interface Profile {
   id: string;
@@ -70,8 +77,13 @@ export const handleSupabaseError = (error: any, customMessage?: string) => {
 
 // Helper function to check if a user is authenticated
 export const isAuthenticated = async () => {
-  const { data } = await supabase.auth.getSession();
-  return !!data.session;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return !!data.session;
+  } catch (error) {
+    console.error('Authentication check failed:', error);
+    return false;
+  }
 };
 
 // Helper function to get the current user's profile
@@ -96,5 +108,16 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   } catch (error) {
     handleSupabaseError(error, 'Failed to get current user profile');
     return null;
+  }
+};
+
+// Function to check Supabase connection
+export const checkSupabaseConnection = async (): Promise<boolean> => {
+  try {
+    const { error } = await supabase.from('profiles').select('count').limit(1);
+    return !error;
+  } catch (error) {
+    console.error('Supabase connection check failed:', error);
+    return false;
   }
 };
