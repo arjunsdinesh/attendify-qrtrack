@@ -8,11 +8,14 @@ import AuthForm from '@/components/auth/AuthForm';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Mail } from 'lucide-react';
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [dbConnected, setDbConnected] = useState(true);
+  const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
 
   // Check database connection
   useEffect(() => {
@@ -22,6 +25,9 @@ const Index = () => {
       if (!connected) {
         toast.error('Database connection failed. Please check your configuration.');
         console.error('Failed to connect to Supabase database.');
+      } else {
+        console.log('Successfully connected to Supabase database.');
+        setEmailConfirmationChecked(true);
       }
     };
     
@@ -39,6 +45,18 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
+  const getEmailConfirmationFromUrl = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('email_confirmed') === 'true';
+  };
+
+  // Show a success message if email was just confirmed
+  useEffect(() => {
+    if (emailConfirmationChecked && getEmailConfirmationFromUrl()) {
+      toast.success('Email confirmed successfully! You can now log in.');
+    }
+  }, [emailConfirmationChecked]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -51,6 +69,16 @@ const Index = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
+          {getEmailConfirmationFromUrl() && (
+            <Alert variant="success" className="mb-4 bg-green-50 border-green-200">
+              <Mail className="h-4 w-4" />
+              <AlertTitle>Email confirmed</AlertTitle>
+              <AlertDescription>
+                Your email has been confirmed successfully. You can now log in to your account.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <Card className="border-2 shadow-lg">
             <CardContent className="pt-6">
               <div className="text-center mb-6">

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
 import { toast } from 'sonner';
@@ -26,7 +25,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [initialRole, setInitialRole] = useState<'student' | 'teacher'>('student');
   const navigate = useNavigate();
 
-  // Check active session
   useEffect(() => {
     const getSession = async () => {
       try {
@@ -46,7 +44,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     getSession();
 
-    // Set up auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
@@ -64,7 +61,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [navigate]);
 
-  // Fetch user profile data
   const fetchUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -77,7 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(data as Profile);
 
-      // Fetch role-specific profile
       if (data.role === 'student') {
         const { data: studentData, error: studentError } = await supabase
           .from('student_profiles')
@@ -102,7 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Sign in function
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
@@ -111,7 +105,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('Email not confirmed') || error.message === 'Email not confirmed') {
+          console.log('Email not confirmed error:', error);
+          throw error;
+        } else {
+          throw error;
+        }
+      }
 
       if (data.user) {
         await fetchUserProfile(data.user.id);
@@ -131,25 +132,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.error('Sign in error:', error);
-      toast.error(error.message || 'Failed to sign in');
-      throw error; // Rethrow for component-level handling
+      
+      if (error.message?.includes('Email not confirmed') || error.code === 'email_not_confirmed') {
+        throw error;
+      } else {
+        toast.error(error.message || 'Failed to sign in');
+        throw error; // Rethrow for component-level handling
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Sign up function
   const signUp = async (email: string, password: string, role: 'student' | 'teacher', fullName: string) => {
     try {
       setLoading(true);
       
-      // Validate Supabase connection first
       const { error: connectionError } = await supabase.from('profiles').select('count').limit(1);
       if (connectionError) {
         throw new Error(`Failed to connect to the database: ${connectionError.message}. Please check your Supabase configuration.`);
       }
       
-      // Create auth user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -164,7 +167,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (data.user) {
-        // Create profile entry
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([
@@ -178,7 +180,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (profileError) throw profileError;
         
-        // Create role-specific profile entry
         if (role === 'student') {
           const { error: studentError } = await supabase
             .from('student_profiles')
@@ -220,7 +221,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Sign out function
   const signOut = async () => {
     try {
       setLoading(true);

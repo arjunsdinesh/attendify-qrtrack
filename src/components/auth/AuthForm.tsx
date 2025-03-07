@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui-components';
-import { AlertCircle, WifiOff } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, WifiOff, Mail } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
 
@@ -40,6 +40,8 @@ const AuthForm = () => {
   const { signIn, signUp, loading, initialRole, setInitialRole } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [formError, setFormError] = useState<string | null>(null);
+  const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
   // Check Supabase connection on component mount
@@ -89,10 +91,18 @@ const AuthForm = () => {
     }
     
     setFormError(null);
+    setIsEmailNotConfirmed(false);
+    
     try {
       await signIn(values.email, values.password);
     } catch (error: any) {
-      setFormError(error.message || 'Failed to sign in. Please check your Supabase configuration.');
+      if (error.message?.includes('Email not confirmed') || error.code === 'email_not_confirmed') {
+        setIsEmailNotConfirmed(true);
+        setUnconfirmedEmail(values.email);
+        setFormError('Your email has not been confirmed. Please check your inbox for the confirmation link.');
+      } else {
+        setFormError(error.message || 'Failed to sign in. Please check your Supabase configuration.');
+      }
     }
   };
 
@@ -143,12 +153,23 @@ const AuthForm = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {formError && authMode === 'login' && (
+              {isEmailNotConfirmed && (
+                <Alert variant="warning" className="mb-4 bg-amber-50 border-amber-200">
+                  <Mail className="h-4 w-4" />
+                  <AlertTitle>Email confirmation required</AlertTitle>
+                  <AlertDescription>
+                    Please check your inbox for {unconfirmedEmail} and click the confirmation link to activate your account.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {formError && authMode === 'login' && !isEmailNotConfirmed && (
                 <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{formError}</AlertDescription>
                 </Alert>
               )}
+              
               <Form {...loginForm}>
                 <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
                   <FormField
@@ -214,6 +235,7 @@ const AuthForm = () => {
                   <AlertDescription>{formError}</AlertDescription>
                 </Alert>
               )}
+              
               <Form {...registerForm}>
                 <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
                   <FormField
