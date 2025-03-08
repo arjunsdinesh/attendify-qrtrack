@@ -22,6 +22,7 @@ const CreateSession = () => {
   const [generating, setGenerating] = useState<boolean>(false);
   const [active, setActive] = useState<boolean>(false);
   
+  // Early return if not a teacher
   if (!user || user.role !== 'teacher') {
     navigate('/');
     return null;
@@ -102,7 +103,8 @@ const CreateSession = () => {
           class_name: className,
           qr_secret: secret,
           is_active: true,
-          start_time: new Date().toISOString()
+          start_time: new Date().toISOString(),
+          date: new Date().toISOString().split('T')[0]
         })
         .select()
         .single();
@@ -214,7 +216,7 @@ const CreateSession = () => {
                     <QRCode 
                       value={qrValue}
                       size={200}
-                      style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                      style={{ height: '200px', width: '200px' }}
                     />
                   ) : (
                     <div className="h-[200px] w-[200px] flex items-center justify-center bg-gray-100">
