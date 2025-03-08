@@ -29,13 +29,13 @@ const Index = () => {
           console.error('Failed to connect to Supabase database.');
         } else {
           console.log('Successfully connected to Supabase database.');
-          setEmailConfirmationChecked(true);
         }
       } catch (error) {
         console.error('Error checking DB connection:', error);
         setDbConnected(false);
       } finally {
         setLocalLoading(false);
+        setEmailConfirmationChecked(true);
       }
     };
     
@@ -74,8 +74,9 @@ const Index = () => {
     console.log('Local loading state:', localLoading);
   }, [loading, localLoading]);
 
-  if (loading || localLoading) {
-    console.log('Showing loading spinner - auth loading:', loading, 'local loading:', localLoading);
+  // Fixed loading check to show spinner only when necessary
+  if (loading) {
+    console.log('Showing loading spinner - auth loading:', loading);
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />
