@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
 import { toast } from 'sonner';
@@ -30,15 +29,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const getSession = async () => {
       try {
         setLoading(true);
+        console.log('Getting session...');
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
+          console.log('Session found:', session.user.id);
           await fetchUserProfile(session.user.id);
+        } else {
+          console.log('No session found');
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error getting session:', error);
         toast.error('Session error. Please try again later.');
-      } finally {
         setLoading(false);
       }
     };
@@ -51,11 +54,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'SIGNED_IN' && session) {
           setLoading(true);
           await fetchUserProfile(session.user.id);
-          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setStudentProfile(null);
           setTeacherProfile(null);
+          setLoading(false);
         }
       }
     );
@@ -76,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Error fetching profile:', error);
+        setLoading(false);
         throw error;
       }
 
@@ -97,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (studentError) {
           console.error('Error fetching student profile:', studentError);
+          setLoading(false);
           throw studentError;
         }
         console.log('Student profile data:', studentData);
@@ -110,13 +115,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (teacherError) {
           console.error('Error fetching teacher profile:', teacherError);
+          setLoading(false);
           throw teacherError;
         }
         console.log('Teacher profile data:', teacherData);
         setTeacherProfile(teacherData as TeacherProfile);
       }
+      
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      setLoading(false);
     }
   };
 

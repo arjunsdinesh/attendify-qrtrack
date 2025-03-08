@@ -31,6 +31,9 @@ const Index = () => {
           console.log('Successfully connected to Supabase database.');
           setEmailConfirmationChecked(true);
         }
+      } catch (error) {
+        console.error('Error checking DB connection:', error);
+        setDbConnected(false);
       } finally {
         setLocalLoading(false);
       }
@@ -41,14 +44,17 @@ const Index = () => {
 
   // Redirect authenticated users to their dashboard
   useEffect(() => {
-    if (!loading && user) {
+    console.log('Redirect check - user:', user, 'loading:', loading, 'localLoading:', localLoading);
+    
+    if (!loading && !localLoading && user) {
+      console.log('Redirecting to dashboard for role:', user.role);
       if (user.role === 'student') {
         navigate('/student');
       } else if (user.role === 'teacher') {
         navigate('/teacher');
       }
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, localLoading, navigate]);
 
   const getEmailConfirmationFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -62,7 +68,14 @@ const Index = () => {
     }
   }, [emailConfirmationChecked]);
 
+  // Debug loading states
+  useEffect(() => {
+    console.log('Auth loading state:', loading);
+    console.log('Local loading state:', localLoading);
+  }, [loading, localLoading]);
+
   if (loading || localLoading) {
+    console.log('Showing loading spinner - auth loading:', loading, 'local loading:', localLoading);
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />
