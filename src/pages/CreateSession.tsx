@@ -22,6 +22,7 @@ const CreateSession = () => {
   const [generating, setGenerating] = useState<boolean>(false);
   const [active, setActive] = useState<boolean>(false);
   
+  // Early return if not a teacher
   if (!user || user.role !== 'teacher') {
     navigate('/');
     return null;
@@ -53,11 +54,11 @@ const CreateSession = () => {
         .from('attendance_sessions')
         .select('qr_secret')
         .eq('id', sessionId)
-        .single();
+        .maybeSingle();
       
       if (sessionError) throw sessionError;
       
-      const secret = sessionData.qr_secret;
+      const secret = sessionData?.qr_secret || '';
       
       // Create the QR code data
       const timestamp = Date.now();
@@ -102,7 +103,8 @@ const CreateSession = () => {
           class_name: className,
           qr_secret: secret,
           is_active: true,
-          start_time: new Date().toISOString()
+          start_time: new Date().toISOString(),
+          date: new Date().toISOString().split('T')[0]
         })
         .select()
         .single();
@@ -211,11 +213,13 @@ const CreateSession = () => {
               <div className="flex flex-col items-center space-y-4">
                 <div className="relative p-2 bg-white rounded-lg shadow-sm border">
                   {qrValue ? (
-                    <QRCode 
-                      value={qrValue}
-                      size={200}
-                      style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
-                    />
+                    <div className="w-[200px] h-[200px] flex items-center justify-center">
+                      <QRCode 
+                        value={qrValue}
+                        size={200}
+                        style={{ height: "100%", width: "100%" }}
+                      />
+                    </div>
                   ) : (
                     <div className="h-[200px] w-[200px] flex items-center justify-center bg-gray-100">
                       <LoadingSpinner className="h-8 w-8" />
