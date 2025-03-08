@@ -27,6 +27,9 @@ const App = () => (
           <Sonner />
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Index />} />
+            <Route path="/student-dashboard" element={<StudentDashboard />} />
+            <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
             <Route path="/student" element={<StudentDashboard />} />
             <Route path="/teacher" element={<TeacherDashboard />} />
             <Route path="/scan-qr" element={<ScanQR />} />

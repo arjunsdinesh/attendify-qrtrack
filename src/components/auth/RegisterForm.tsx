@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,10 +19,17 @@ const registerSchema = z.object({
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
   confirmPassword: z.string().min(6, { message: 'Please confirm your password' }),
   role: z.enum(['student', 'teacher'], { required_error: 'Please select a role' }),
+  registerNumber: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
-});
+}).refine(
+  (data) => !(data.role === 'student' && (!data.registerNumber || data.registerNumber.trim() === '')),
+  {
+    message: "University register number is required for students",
+    path: ["registerNumber"],
+  }
+);
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
@@ -33,6 +40,7 @@ interface RegisterFormProps {
 const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
   const { signUp, loading, initialRole, setInitialRole } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
+  const [showRegisterNumber, setShowRegisterNumber] = useState(initialRole === 'student');
 
   // Register form handler
   const registerForm = useForm<RegisterFormValues>({
@@ -43,8 +51,17 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
       password: '',
       confirmPassword: '',
       role: initialRole,
+      registerNumber: '',
     },
+    mode: 'onChange',
   });
+
+  // Watch role to show/hide register number field
+  const selectedRole = registerForm.watch('role');
+  
+  useEffect(() => {
+    setShowRegisterNumber(selectedRole === 'student');
+  }, [selectedRole]);
 
   // Handle registration submission
   const onRegisterSubmit = async (values: RegisterFormValues) => {
@@ -55,7 +72,13 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
     
     setFormError(null);
     try {
-      await signUp(values.email, values.password, values.role, values.fullName);
+      await signUp(
+        values.email, 
+        values.password, 
+        values.role, 
+        values.fullName,
+        values.registerNumber
+      );
     } catch (error: any) {
       setFormError(error.message || 'Failed to create account. Please check your Supabase configuration.');
     }
@@ -64,6 +87,7 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
   // Handle role change in registration form
   const handleRoleChange = (value: 'student' | 'teacher') => {
     setInitialRole(value);
+    setShowRegisterNumber(value === 'student');
   };
 
   return (
@@ -114,42 +138,6 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
           />
           <FormField
             control={registerForm.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Password</FormLabel>
-                <FormControl>
-                  <Input 
-                    placeholder="Create a password" 
-                    type="password" 
-                    {...field} 
-                    className="input-focus-ring"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={registerForm.control}
-            name="confirmPassword"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Confirm Password</FormLabel>
-                <FormControl>
-                  <Input 
-                    placeholder="Confirm your password" 
-                    type="password" 
-                    {...field} 
-                    className="input-focus-ring"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={registerForm.control}
             name="role"
             render={({ field }) => (
               <FormItem className="space-y-3">
@@ -180,6 +168,63 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                       </FormLabel>
                     </FormItem>
                   </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          {showRegisterNumber && (
+            <FormField
+              control={registerForm.control}
+              name="registerNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>University Register Number</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Enter your university register number" 
+                      {...field} 
+                      className="input-focus-ring"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+          
+          <FormField
+            control={registerForm.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="Create a password" 
+                    type="password" 
+                    {...field} 
+                    className="input-focus-ring"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={registerForm.control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirm Password</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="Confirm your password" 
+                    type="password" 
+                    {...field} 
+                    className="input-focus-ring"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
 import { toast } from 'sonner';
@@ -9,7 +10,7 @@ interface AuthContextType {
   teacherProfile: TeacherProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, role: 'student' | 'teacher', fullName: string) => Promise<void>;
+  signUp: (email: string, password: string, role: 'student' | 'teacher', fullName: string, registerNumber?: string) => Promise<void>;
   signOut: () => Promise<void>;
   setInitialRole: (role: 'student' | 'teacher') => void;
   initialRole: 'student' | 'teacher';
@@ -46,6 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
         if (event === 'SIGNED_IN' && session) {
           await fetchUserProfile(session.user.id);
         } else if (event === 'SIGNED_OUT') {
@@ -63,14 +65,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log('Fetching user profile for:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching profile:', error);
+        throw error;
+      }
 
+      console.log('Profile data fetched:', data);
       setUser(data as Profile);
 
       if (data.role === 'student') {
@@ -80,7 +87,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('id', userId)
           .single();
         
-        if (studentError) throw studentError;
+        if (studentError) {
+          console.error('Error fetching student profile:', studentError);
+          throw studentError;
+        }
+        console.log('Student profile data:', studentData);
         setStudentProfile(studentData as StudentProfile);
       } else if (data.role === 'teacher') {
         const { data: teacherData, error: teacherError } = await supabase
@@ -89,7 +100,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('id', userId)
           .single();
         
-        if (teacherError) throw teacherError;
+        if (teacherError) {
+          console.error('Error fetching teacher profile:', teacherError);
+          throw teacherError;
+        }
+        console.log('Teacher profile data:', teacherData);
         setTeacherProfile(teacherData as TeacherProfile);
       }
     } catch (error) {
@@ -122,6 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('id', data.user.id)
           .single();
         
+        console.log('Login successful, redirecting based on role:', profileData?.role);
         if (profileData?.role === 'student') {
           toast.success('Welcome back, student!');
           navigate('/student-dashboard');
@@ -144,9 +160,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (email: string, password: string, role: 'student' | 'teacher', fullName: string) => {
+  const signUp = async (email: string, password: string, role: 'student' | 'teacher', fullName: string, registerNumber?: string) => {
     try {
       setLoading(true);
+      
+      // Validate register number for students
+      if (role === 'student' && (!registerNumber || registerNumber.trim() === '')) {
+        throw new Error('University register number is required for students');
+      }
+      
+      // Check if register number already exists for students
+      if (role === 'student' && registerNumber) {
+        const { data: existingUser, error: searchError } = await supabase
+          .from('student_profiles')
+          .select('id')
+          .eq('register_number', registerNumber)
+          .maybeSingle();
+          
+        if (searchError) {
+          console.error('Error checking register number:', searchError);
+        }
+        
+        if (existingUser) {
+          throw new Error('This university register number is already registered');
+        }
+      }
       
       const { error: connectionError } = await supabase.from('profiles').select('count').limit(1);
       if (connectionError) {
@@ -186,7 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .insert([
               {
                 id: data.user.id,
-                register_number: '',
+                register_number: registerNumber || '',
                 roll_number: '',
                 department: '',
                 semester: 1,
