@@ -15,26 +15,18 @@ const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [dbConnected, setDbConnected] = useState(true);
-  const [localLoading, setLocalLoading] = useState(true);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
 
   // Check database connection
   useEffect(() => {
     const checkConnection = async () => {
-      try {
-        const connected = await checkSupabaseConnection();
-        setDbConnected(connected);
-        if (!connected) {
-          toast.error('Database connection failed. Please check your configuration.');
-          console.error('Failed to connect to Supabase database.');
-        } else {
-          console.log('Successfully connected to Supabase database.');
-        }
-      } catch (error) {
-        console.error('Error checking DB connection:', error);
-        setDbConnected(false);
-      } finally {
-        setLocalLoading(false);
+      const connected = await checkSupabaseConnection();
+      setDbConnected(connected);
+      if (!connected) {
+        toast.error('Database connection failed. Please check your configuration.');
+        console.error('Failed to connect to Supabase database.');
+      } else {
+        console.log('Successfully connected to Supabase database.');
         setEmailConfirmationChecked(true);
       }
     };
@@ -44,17 +36,14 @@ const Index = () => {
 
   // Redirect authenticated users to their dashboard
   useEffect(() => {
-    console.log('Redirect check - user:', user, 'loading:', loading, 'localLoading:', localLoading);
-    
-    if (!loading && !localLoading && user) {
-      console.log('Redirecting to dashboard for role:', user.role);
+    if (user && !loading) {
       if (user.role === 'student') {
         navigate('/student');
       } else if (user.role === 'teacher') {
         navigate('/teacher');
       }
     }
-  }, [user, loading, localLoading, navigate]);
+  }, [user, loading, navigate]);
 
   const getEmailConfirmationFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -68,15 +57,7 @@ const Index = () => {
     }
   }, [emailConfirmationChecked]);
 
-  // Debug loading states
-  useEffect(() => {
-    console.log('Auth loading state:', loading);
-    console.log('Local loading state:', localLoading);
-  }, [loading, localLoading]);
-
-  // Fixed loading check to show spinner only when necessary
   if (loading) {
-    console.log('Showing loading spinner - auth loading:', loading);
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />

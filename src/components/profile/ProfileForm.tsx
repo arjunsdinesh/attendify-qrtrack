@@ -3,12 +3,15 @@ import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
+import { toast } from 'sonner';
 
 // Schema for student profile
 const studentProfileSchema = z.object({
@@ -70,8 +73,8 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
     if (user) {
       if (role === 'student' && studentProfile) {
         studentForm.reset({
-          fullName: user.full_name || '',
-          email: user.email || '',
+          fullName: user.full_name,
+          email: user.email,
           registerNumber: studentProfile.register_number || '',
           rollNumber: studentProfile.roll_number || '',
           department: studentProfile.department || '',
@@ -79,8 +82,8 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
         });
       } else if (role === 'teacher' && teacherProfile) {
         teacherForm.reset({
-          fullName: user.full_name || '',
-          email: user.email || '',
+          fullName: user.full_name,
+          email: user.email,
           employeeId: teacherProfile.employee_id || '',
           department: teacherProfile.department || '',
           designation: teacherProfile.designation || '',
@@ -90,56 +93,23 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
   }, [user, studentProfile, teacherProfile, role]);
 
   return (
-    <div className="w-full max-w-xl mx-auto">
-      {role === 'student' ? (
-        <Form {...studentForm}>
-          <form onSubmit={studentForm.handleSubmit(onSave)} className="space-y-4">
-            <FormField
-              control={studentForm.control}
-              name="fullName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} className="input-focus-ring" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={studentForm.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled className="bg-muted" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-4">
+    <Card className="w-full max-w-xl mx-auto">
+      <CardHeader>
+        <CardTitle>Profile Information</CardTitle>
+        <CardDescription>
+          Update your personal information and profile details
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {role === 'student' ? (
+          <Form {...studentForm}>
+            <form onSubmit={studentForm.handleSubmit(onSave)} className="space-y-4">
               <FormField
                 control={studentForm.control}
-                name="registerNumber"
+                name="fullName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Register Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} readOnly className="bg-muted" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={studentForm.control}
-                name="rollNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Roll Number</FormLabel>
+                    <FormLabel>Full Name</FormLabel>
                     <FormControl>
                       <Input {...field} className="input-focus-ring" />
                     </FormControl>
@@ -147,135 +117,176 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
                   </FormItem>
                 )}
               />
-            </div>
-            <FormField
-              control={studentForm.control}
-              name="department"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Department</FormLabel>
-                  <FormControl>
-                    <Input {...field} className="input-focus-ring" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={studentForm.control}
-              name="semester"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Semester</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(parseInt(value))}
-                    defaultValue={field.value.toString()}
-                  >
+              <FormField
+                control={studentForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select semester" />
-                      </SelectTrigger>
+                      <Input {...field} disabled className="bg-muted" />
                     </FormControl>
-                    <SelectContent>
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
-                        <SelectItem key={sem} value={sem.toString()}>
-                          Semester {sem}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button 
-              type="submit" 
-              className="w-full bg-brand-500 hover:bg-brand-600"
-              disabled={isLoading}
-            >
-              {isLoading ? <LoadingSpinner className="h-4 w-4" /> : 'Update Profile'}
-            </Button>
-          </form>
-        </Form>
-      ) : (
-        <Form {...teacherForm}>
-          <form onSubmit={teacherForm.handleSubmit(onSave)} className="space-y-4">
-            <FormField
-              control={teacherForm.control}
-              name="fullName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} className="input-focus-ring" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={teacherForm.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled className="bg-muted" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={teacherForm.control}
-              name="employeeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Employee ID</FormLabel>
-                  <FormControl>
-                    <Input {...field} className="input-focus-ring" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={teacherForm.control}
-              name="department"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Department</FormLabel>
-                  <FormControl>
-                    <Input {...field} className="input-focus-ring" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={teacherForm.control}
-              name="designation"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Designation</FormLabel>
-                  <FormControl>
-                    <Input {...field} className="input-focus-ring" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button 
-              type="submit" 
-              className="w-full bg-brand-500 hover:bg-brand-600"
-              disabled={isLoading}
-            >
-              {isLoading ? <LoadingSpinner className="h-4 w-4" /> : 'Update Profile'}
-            </Button>
-          </form>
-        </Form>
-      )}
-    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={studentForm.control}
+                  name="registerNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Register Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} className="input-focus-ring" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={studentForm.control}
+                  name="rollNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Roll Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} className="input-focus-ring" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={studentForm.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="input-focus-ring" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={studentForm.control}
+                name="semester"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Semester</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(parseInt(value))}
+                      defaultValue={field.value.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select semester" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                          <SelectItem key={sem} value={sem.toString()}>
+                            Semester {sem}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button 
+                type="submit" 
+                className="w-full bg-brand-500 hover:bg-brand-600"
+                disabled={isLoading}
+              >
+                {isLoading ? <LoadingSpinner className="h-4 w-4" /> : 'Update Profile'}
+              </Button>
+            </form>
+          </Form>
+        ) : (
+          <Form {...teacherForm}>
+            <form onSubmit={teacherForm.handleSubmit(onSave)} className="space-y-4">
+              <FormField
+                control={teacherForm.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="input-focus-ring" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={teacherForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled className="bg-muted" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={teacherForm.control}
+                name="employeeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Employee ID</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="input-focus-ring" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={teacherForm.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="input-focus-ring" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={teacherForm.control}
+                name="designation"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Designation</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="input-focus-ring" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button 
+                type="submit" 
+                className="w-full bg-brand-500 hover:bg-brand-600"
+                disabled={isLoading}
+              >
+                {isLoading ? <LoadingSpinner className="h-4 w-4" /> : 'Update Profile'}
+              </Button>
+            </form>
+          </Form>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

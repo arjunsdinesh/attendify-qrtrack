@@ -7,11 +7,12 @@ import { toast } from 'sonner';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
+import { LoadingSpinner } from '@/components/ui-components';
 import ProfileForm from '@/components/profile/ProfileForm';
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [saving, setSaving] = useState(false);
   
   if (!user) {
@@ -23,46 +24,19 @@ const Profile = () => {
     try {
       setSaving(true);
       
-      // Base profile data
-      const profileData = {
-        id: user.id,
-        full_name: formData.fullName,
-        role: user.role,
-        updated_at: new Date().toISOString()
-      };
-      
-      // Update the base profile
-      const { error: profileError } = await supabase
+      const { error } = await supabase
         .from('profiles')
-        .upsert(profileData);
+        .upsert({
+          id: user.id,
+          full_name: formData.fullName,
+          register_number: formData.registerNumber,
+          roll_number: formData.rollNumber,
+          department: formData.department,
+          role: user.role,
+          updated_at: new Date().toISOString()
+        });
       
-      if (profileError) throw profileError;
-      
-      // Update role-specific profile
-      if (user.role === 'student') {
-        const { error: studentError } = await supabase
-          .from('student_profiles')
-          .upsert({
-            id: user.id,
-            register_number: formData.registerNumber,
-            roll_number: formData.rollNumber,
-            department: formData.department,
-            semester: formData.semester
-          });
-        
-        if (studentError) throw studentError;
-      } else if (user.role === 'teacher') {
-        const { error: teacherError } = await supabase
-          .from('teacher_profiles')
-          .upsert({
-            id: user.id,
-            employee_id: formData.employeeId,
-            department: formData.department,
-            designation: formData.designation
-          });
-        
-        if (teacherError) throw teacherError;
-      }
+      if (error) throw error;
       
       toast.success('Profile updated successfully');
     } catch (error: any) {
