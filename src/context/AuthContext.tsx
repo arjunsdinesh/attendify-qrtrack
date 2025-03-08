@@ -49,7 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id);
         if (event === 'SIGNED_IN' && session) {
+          setLoading(true);
           await fetchUserProfile(session.user.id);
+          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setStudentProfile(null);
@@ -70,11 +72,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching profile:', error);
         throw error;
+      }
+
+      if (!data) {
+        console.error('No profile found for user:', userId);
+        setLoading(false);
+        return;
       }
 
       console.log('Profile data fetched:', data);
@@ -85,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('student_profiles')
           .select('*')
           .eq('id', userId)
-          .single();
+          .maybeSingle();
         
         if (studentError) {
           console.error('Error fetching student profile:', studentError);
@@ -98,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('teacher_profiles')
           .select('*')
           .eq('id', userId)
-          .single();
+          .maybeSingle();
         
         if (teacherError) {
           console.error('Error fetching teacher profile:', teacherError);

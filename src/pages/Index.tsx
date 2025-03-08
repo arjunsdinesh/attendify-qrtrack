@@ -15,19 +15,24 @@ const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [dbConnected, setDbConnected] = useState(true);
+  const [localLoading, setLocalLoading] = useState(true);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
 
   // Check database connection
   useEffect(() => {
     const checkConnection = async () => {
-      const connected = await checkSupabaseConnection();
-      setDbConnected(connected);
-      if (!connected) {
-        toast.error('Database connection failed. Please check your configuration.');
-        console.error('Failed to connect to Supabase database.');
-      } else {
-        console.log('Successfully connected to Supabase database.');
-        setEmailConfirmationChecked(true);
+      try {
+        const connected = await checkSupabaseConnection();
+        setDbConnected(connected);
+        if (!connected) {
+          toast.error('Database connection failed. Please check your configuration.');
+          console.error('Failed to connect to Supabase database.');
+        } else {
+          console.log('Successfully connected to Supabase database.');
+          setEmailConfirmationChecked(true);
+        }
+      } finally {
+        setLocalLoading(false);
       }
     };
     
@@ -36,7 +41,7 @@ const Index = () => {
 
   // Redirect authenticated users to their dashboard
   useEffect(() => {
-    if (user && !loading) {
+    if (!loading && user) {
       if (user.role === 'student') {
         navigate('/student');
       } else if (user.role === 'teacher') {
@@ -57,7 +62,7 @@ const Index = () => {
     }
   }, [emailConfirmationChecked]);
 
-  if (loading) {
+  if (loading || localLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />
