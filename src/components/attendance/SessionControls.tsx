@@ -45,7 +45,9 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       console.log('Creating session with:', {
         teacher_id: userId,
         class_id: classNameInput,
-        qr_secret: secret
+        qr_secret: secret,
+        date: new Date().toISOString().split('T')[0],
+        created_by: userId
       });
       
       // Create a new session with the correct column names
@@ -53,13 +55,11 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         .from('attendance_sessions')
         .insert({
           teacher_id: userId,
-          // Using class_id instead of class_name based on the error message
           class_id: classNameInput,
           qr_secret: secret,
           is_active: true,
           start_time: new Date().toISOString(),
           date: new Date().toISOString().split('T')[0],
-          // Add created_by field as it's required but not nullable
           created_by: userId
         })
         .select()

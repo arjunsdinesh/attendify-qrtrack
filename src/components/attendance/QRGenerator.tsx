@@ -44,9 +44,17 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         .eq('id', sessionId)
         .maybeSingle();
       
-      if (sessionError) throw sessionError;
+      if (sessionError) {
+        console.error('Error fetching session secret:', sessionError);
+        throw sessionError;
+      }
       
       const secret = sessionData?.qr_secret || '';
+      
+      if (!secret) {
+        console.error('QR secret not found for session');
+        return;
+      }
       
       // Create the QR code data
       const timestamp = Date.now();
