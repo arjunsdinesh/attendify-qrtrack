@@ -90,10 +90,21 @@ const CreateSession = () => {
         return;
       }
       
+      if (!user || !user.id) {
+        toast.error('User authentication required');
+        return;
+      }
+      
       setActive(true);
       
       // Generate a new secret for this session
       const secret = generateSecret();
+      
+      console.log('Creating session with:', {
+        teacher_id: user.id,
+        class_name: className,
+        qr_secret: secret
+      });
       
       // Create a new session
       const { data, error } = await supabase
@@ -109,8 +120,16 @@ const CreateSession = () => {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw error;
+      }
       
+      if (!data) {
+        throw new Error('No data returned from session creation');
+      }
+      
+      console.log('Session created successfully:', data);
       setSessionId(data.id);
       
       // Generate the first QR code
@@ -119,7 +138,7 @@ const CreateSession = () => {
       toast.success('Attendance tracking started');
     } catch (error: any) {
       console.error('Error starting attendance tracking:', error);
-      toast.error('Failed to start attendance tracking');
+      toast.error('Failed to start attendance tracking: ' + (error.message || 'Unknown error'));
       setActive(false);
     }
   };
