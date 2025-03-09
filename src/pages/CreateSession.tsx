@@ -106,16 +106,19 @@ const CreateSession = () => {
         qr_secret: secret
       });
       
-      // Create a new session
+      // Create a new session with the correct column names
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
           teacher_id: user.id,
-          class_name: className,
+          // Using class_id instead of class_name based on the error message
+          class_id: className,
           qr_secret: secret,
           is_active: true,
           start_time: new Date().toISOString(),
-          date: new Date().toISOString().split('T')[0]
+          date: new Date().toISOString().split('T')[0],
+          // Add created_by field as it's required but not nullable
+          created_by: user.id
         })
         .select()
         .single();
