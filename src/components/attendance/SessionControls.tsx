@@ -43,24 +43,22 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       const secret = generateSecret();
       
       console.log('Creating session with:', {
-        teacher_id: userId,
+        created_by: userId,
         class_id: classNameInput,
         qr_secret: secret,
-        date: new Date().toISOString().split('T')[0],
-        created_by: userId
+        date: new Date().toISOString().split('T')[0]
       });
       
-      // Create a new session with the correct column names
+      // Create a new session with the correct column names based on the database schema
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
-          teacher_id: userId,
+          created_by: userId,
           class_id: classNameInput,
           qr_secret: secret,
           is_active: true,
           start_time: new Date().toISOString(),
-          date: new Date().toISOString().split('T')[0],
-          created_by: userId
+          date: new Date().toISOString().split('T')[0]
         })
         .select()
         .single();
