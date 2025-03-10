@@ -1,5 +1,5 @@
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
@@ -8,6 +8,8 @@ import { SessionControls } from '@/components/attendance/SessionControls';
 const CreateSession = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const classId = searchParams.get('class');
   
   // Early return if not a teacher
   if (!user || user.role !== 'teacher') {

@@ -5,20 +5,17 @@ import { toast } from 'sonner';
 import { supabase } from '@/utils/supabase';
 import { QRGenerator } from './QRGenerator';
 import { SessionForm } from './SessionForm';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useSearchParams } from 'react-router-dom';
 
 interface SessionControlsProps {
   userId: string;
 }
 
 export const SessionControls = ({ userId }: SessionControlsProps) => {
-  const [classId, setClassId] = useState<string>('');
+  const [searchParams] = useSearchParams();
+  const preselectedClassId = searchParams.get('class');
+  
+  const [classId, setClassId] = useState<string>(preselectedClassId || '');
   const [className, setClassName] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [active, setActive] = useState<boolean>(false);
@@ -42,6 +39,14 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         if (error) throw error;
         
         setClasses(data || []);
+        
+        // If we have a preselected class ID, set the class name as well
+        if (preselectedClassId && data) {
+          const selectedClass = data.find(c => c.id === preselectedClassId);
+          if (selectedClass) {
+            setClassName(selectedClass.name);
+          }
+        }
       } catch (error: any) {
         console.error('Error fetching classes:', error);
         toast.error('Failed to load classes');
@@ -51,7 +56,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     };
     
     fetchClasses();
-  }, [userId]);
+  }, [userId, preselectedClassId]);
 
   // Generate a cryptographically secure random secret
   const generateSecret = () => {
@@ -82,7 +87,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       console.log('Creating session with:', {
         created_by: userId,
-        class_id: selectedClassId, // Now using the actual UUID from the classes table
+        class_id: selectedClassId,
         qr_secret: secret,
         date: new Date().toISOString().split('T')[0]
       });
@@ -92,7 +97,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         .from('attendance_sessions')
         .insert({
           created_by: userId,
-          class_id: selectedClassId, // Now using the actual UUID from the classes table
+          class_id: selectedClassId,
           qr_secret: secret,
           is_active: true,
           start_time: new Date().toISOString(),
@@ -164,7 +169,8 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
             classes={classes}
             isLoadingClasses={isLoadingClasses}
             onStartSession={startQRGenerator}
-            isLoading={isLoading} 
+            isLoading={isLoading}
+            selectedClassId={preselectedClassId || ''}
           />
         ) : (
           <QRGenerator 

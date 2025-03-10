@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/ui-components';
@@ -16,24 +16,33 @@ interface SessionFormProps {
   isLoadingClasses: boolean;
   onStartSession: (classId: string, className: string) => void;
   isLoading?: boolean;
+  selectedClassId?: string;
 }
 
 export const SessionForm = ({ 
   classes, 
   isLoadingClasses, 
   onStartSession, 
-  isLoading = false 
+  isLoading = false,
+  selectedClassId = ''
 }: SessionFormProps) => {
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
+  const [selectedClass, setSelectedClass] = useState<string>(selectedClassId);
+
+  // Update the selected class when the prop changes
+  useEffect(() => {
+    if (selectedClassId) {
+      setSelectedClass(selectedClassId);
+    }
+  }, [selectedClassId]);
 
   const handleSubmit = () => {
-    if (!selectedClassId) return;
-    
-    // Find the class name for the selected ID
-    const selectedClass = classes.find(c => c.id === selectedClassId);
     if (!selectedClass) return;
     
-    onStartSession(selectedClassId, selectedClass.name);
+    // Find the class name for the selected ID
+    const classObj = classes.find(c => c.id === selectedClass);
+    if (!classObj) return;
+    
+    onStartSession(selectedClass, classObj.name);
   };
 
   return (
@@ -46,7 +55,7 @@ export const SessionForm = ({
             <span className="text-sm text-muted-foreground">Loading classes...</span>
           </div>
         ) : classes.length > 0 ? (
-          <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+          <Select value={selectedClass} onValueChange={setSelectedClass}>
             <SelectTrigger id="classSelect">
               <SelectValue placeholder="Select a class" />
             </SelectTrigger>
@@ -67,7 +76,7 @@ export const SessionForm = ({
       <Button 
         onClick={handleSubmit}
         className="w-full"
-        disabled={!selectedClassId || isLoading || classes.length === 0}
+        disabled={!selectedClass || isLoading || classes.length === 0}
       >
         {isLoading ? 'Creating...' : 'Start Session'}
       </Button>
