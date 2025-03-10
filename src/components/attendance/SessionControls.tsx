@@ -1,20 +1,57 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { supabase } from '@/utils/supabase';
 import { QRGenerator } from './QRGenerator';
 import { SessionForm } from './SessionForm';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface SessionControlsProps {
   userId: string;
 }
 
 export const SessionControls = ({ userId }: SessionControlsProps) => {
-  const [className, setClassName] = useState('');
+  const [classId, setClassId] = useState<string>('');
+  const [className, setClassName] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [active, setActive] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [isLoadingClasses, setIsLoadingClasses] = useState<boolean>(false);
+
+  // Fetch teacher's classes when component mounts
+  useEffect(() => {
+    const fetchClasses = async () => {
+      if (!userId) return;
+      
+      try {
+        setIsLoadingClasses(true);
+        
+        const { data, error } = await supabase
+          .from('classes')
+          .select('id, name')
+          .eq('teacher_id', userId);
+        
+        if (error) throw error;
+        
+        setClasses(data || []);
+      } catch (error: any) {
+        console.error('Error fetching classes:', error);
+        toast.error('Failed to load classes');
+      } finally {
+        setIsLoadingClasses(false);
+      }
+    };
+    
+    fetchClasses();
+  }, [userId]);
 
   // Generate a cryptographically secure random secret
   const generateSecret = () => {
@@ -24,10 +61,10 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   };
 
   // Start generating QR codes
-  const startQRGenerator = async (classNameInput: string) => {
+  const startQRGenerator = async (selectedClassId: string, selectedClassName: string) => {
     try {
-      if (!classNameInput.trim()) {
-        toast.error('Please enter a class name');
+      if (!selectedClassId) {
+        toast.error('Please select a class');
         return;
       }
       
@@ -37,14 +74,15 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       }
       
       setIsLoading(true);
-      setClassName(classNameInput);
+      setClassId(selectedClassId);
+      setClassName(selectedClassName);
       
       // Generate a new secret for this session
       const secret = generateSecret();
       
       console.log('Creating session with:', {
         created_by: userId,
-        class_id: classNameInput,
+        class_id: selectedClassId, // Now using the actual UUID from the classes table
         qr_secret: secret,
         date: new Date().toISOString().split('T')[0]
       });
@@ -54,7 +92,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         .from('attendance_sessions')
         .insert({
           created_by: userId,
-          class_id: classNameInput,
+          class_id: selectedClassId, // Now using the actual UUID from the classes table
           qr_secret: secret,
           is_active: true,
           start_time: new Date().toISOString(),
@@ -123,7 +161,9 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       <CardContent className="flex flex-col space-y-4">
         {!active ? (
           <SessionForm 
-            onStartSession={startQRGenerator} 
+            classes={classes}
+            isLoadingClasses={isLoadingClasses}
+            onStartSession={startQRGenerator}
             isLoading={isLoading} 
           />
         ) : (
