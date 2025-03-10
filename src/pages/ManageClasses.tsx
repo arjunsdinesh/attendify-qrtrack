@@ -19,6 +19,7 @@ const ManageClasses = () => {
   const [classes, setClasses] = useState<any[]>([]);
   const [newClassName, setNewClassName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   
   if (!user || user.role !== 'teacher') {
     navigate('/');
@@ -66,7 +67,9 @@ const ManageClasses = () => {
         .insert({
           name: newClassName.trim(),
           teacher_id: user.id,
-          created_at: new Date().toISOString()
+          department: 'General', // Default department
+          semester: 1, // Default semester
+          course_code: 'GEN101' // Default course code
         })
         .select()
         .single();
@@ -75,6 +78,7 @@ const ManageClasses = () => {
       
       setClasses([data, ...classes]);
       setNewClassName('');
+      setCreateDialogOpen(false);
       toast.success('Class created successfully');
     } catch (error: any) {
       console.error('Error creating class:', error);
@@ -102,7 +106,7 @@ const ManageClasses = () => {
         
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Manage Classes</h1>
-          <Dialog>
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button>Create New Class</Button>
             </DialogTrigger>
@@ -172,7 +176,7 @@ const ManageClasses = () => {
           <div className="text-center p-8 bg-muted/50 rounded-lg">
             <h3 className="font-medium mb-2">No Classes Yet</h3>
             <p className="text-muted-foreground mb-4">Create your first class to start tracking attendance.</p>
-            <Dialog>
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button>Create New Class</Button>
               </DialogTrigger>
