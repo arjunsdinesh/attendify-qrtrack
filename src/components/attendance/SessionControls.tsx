@@ -92,7 +92,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         date: new Date().toISOString().split('T')[0]
       });
       
-      // Create a new session with the correct column names based on the database schema
+      // Create a new session
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
