@@ -81,11 +81,12 @@ const AttendanceHistory = () => {
         if (Array.isArray(record.attendance_sessions.classes)) {
           // If classes is an array, get the first element's name
           if (record.attendance_sessions.classes.length > 0) {
-            return record.attendance_sessions.classes[0].name || '-';
+            return record.attendance_sessions.classes[0]?.name || '-';
           }
         } else if (typeof record.attendance_sessions.classes === 'object') {
-          // If classes is an object, get the name property
-          return record.attendance_sessions.classes.name || '-';
+          // Check if 'name' property exists on the object
+          return 'name' in record.attendance_sessions.classes ? 
+            (record.attendance_sessions.classes.name as string) : '-';
         }
       }
     }

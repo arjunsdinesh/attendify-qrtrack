@@ -92,9 +92,10 @@ const ScanQR = () => {
         let className = 'Unknown Class';
         if (sessionData.classes) {
           if (Array.isArray(sessionData.classes) && sessionData.classes.length > 0) {
-            className = sessionData.classes[0].name || 'Unknown Class';
+            className = sessionData.classes[0]?.name || 'Unknown Class';
           } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
-            className = sessionData.classes.name || 'Unknown Class';
+            // Need to check if the property 'name' exists on this object
+            className = 'name' in sessionData.classes ? (sessionData.classes.name as string) : 'Unknown Class';
           }
         }
         
@@ -126,9 +127,10 @@ const ScanQR = () => {
       let className = 'Unknown Class';
       if (sessionData.classes) {
         if (Array.isArray(sessionData.classes) && sessionData.classes.length > 0) {
-          className = sessionData.classes[0].name || 'Unknown Class';
+          className = sessionData.classes[0]?.name || 'Unknown Class';
         } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
-          className = sessionData.classes.name || 'Unknown Class';
+          // Need to check if the property 'name' exists on this object
+          className = 'name' in sessionData.classes ? (sessionData.classes.name as string) : 'Unknown Class';
         }
       }
       

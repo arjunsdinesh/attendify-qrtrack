@@ -60,9 +60,10 @@ const AttendanceRecords = () => {
           const classData = session.classes;
           if (classData) {
             if (Array.isArray(classData) && classData.length > 0) {
-              className = classData[0].name || 'Unknown Class';
+              className = classData[0]?.name || 'Unknown Class';
             } else if (typeof classData === 'object' && classData !== null) {
-              className = classData.name || 'Unknown Class';
+              // Need to check if the property 'name' exists on this object
+              className = 'name' in classData ? (classData.name as string) : 'Unknown Class';
             }
           }
           
