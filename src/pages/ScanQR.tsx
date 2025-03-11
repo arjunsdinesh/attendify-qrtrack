@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const ScanQR = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const ScanQR = () => {
   const [scanning, setScanning] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState<{ className: string; date: string } | null>(null);
   
   if (!user || user.role !== 'student') {
     navigate('/');
@@ -51,7 +53,11 @@ const ScanQR = () => {
       // Check if the session is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('is_active')
+        .select(`
+          is_active,
+          classes(name),
+          start_time
+        `)
         .eq('id', qrData.sessionId)
         .maybeSingle();
       
@@ -80,8 +86,12 @@ const ScanQR = () => {
       }
       
       if (existingRecord) {
-        toast.info('You have already marked your attendance for this session');
         setSuccess(true);
+        // Extract class name from session data
+        const className = sessionData.classes?.name || 'Unknown Class';
+        const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
+        setSessionInfo({ className, date: sessionDate });
+        toast.info('You have already marked your attendance for this session');
         return;
       }
       
@@ -102,6 +112,11 @@ const ScanQR = () => {
         console.error('Insert error:', insertError);
         throw insertError;
       }
+      
+      // Extract class name from session data
+      const className = sessionData.classes?.name || 'Unknown Class';
+      const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
+      setSessionInfo({ className, date: sessionDate });
       
       toast.success('Attendance marked successfully!');
       setSuccess(true);
@@ -128,6 +143,7 @@ const ScanQR = () => {
   const toggleScanner = () => {
     setScanning(prev => !prev);
     if (success) setSuccess(false);
+    setSessionInfo(null);
   };
 
   return (
@@ -151,6 +167,15 @@ const ScanQR = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-4">
+            {success && sessionInfo && (
+              <Alert variant="success" className="mb-4 w-full">
+                <AlertTitle>Attendance Marked!</AlertTitle>
+                <AlertDescription>
+                  Your attendance for <strong>{sessionInfo.className}</strong> on <strong>{sessionInfo.date}</strong> has been successfully recorded.
+                </AlertDescription>
+              </Alert>
+            )}
+            
             {scanning ? (
               <div className="w-full aspect-square rounded-lg overflow-hidden relative">
                 <Scanner

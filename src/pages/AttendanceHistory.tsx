@@ -8,6 +8,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const AttendanceHistory = () => {
   const navigate = useNavigate();
@@ -68,15 +69,25 @@ const AttendanceHistory = () => {
 
   // Format date for display
   const formatDate = (dateString: string) => {
+    if (!dateString) return '-';
     return new Date(dateString).toLocaleString();
   };
 
   // Get class name from record
   const getClassName = (record: any) => {
-    if (record.attendance_sessions && 
-        record.attendance_sessions.classes && 
-        record.attendance_sessions.classes.name) {
-      return record.attendance_sessions.classes.name;
+    // Handle case where classes might be an array due to Supabase response format
+    if (record.attendance_sessions) {
+      if (record.attendance_sessions.classes) {
+        if (Array.isArray(record.attendance_sessions.classes)) {
+          // If classes is an array, get the first element's name
+          if (record.attendance_sessions.classes.length > 0) {
+            return record.attendance_sessions.classes[0].name || '-';
+          }
+        } else if (typeof record.attendance_sessions.classes === 'object') {
+          // If classes is an object, get the name property
+          return record.attendance_sessions.classes.name || '-';
+        }
+      }
     }
     return '-';
   };
@@ -146,7 +157,11 @@ const AttendanceHistory = () => {
               </div>
             ) : (
               <div className="text-center p-8">
-                <p className="text-muted-foreground">You haven't marked attendance for any classes yet.</p>
+                <Alert variant="warning" className="mb-4">
+                  <AlertDescription>
+                    You haven't marked attendance for any classes yet.
+                  </AlertDescription>
+                </Alert>
               </div>
             )}
           </CardContent>

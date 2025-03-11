@@ -10,6 +10,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const AttendanceRecords = () => {
   const navigate = useNavigate();
@@ -56,6 +57,8 @@ const AttendanceRecords = () => {
           let className = 'Unknown Class';
           if (session.classes && Array.isArray(session.classes) && session.classes.length > 0) {
             className = session.classes[0].name || 'Unknown Class';
+          } else if (session.classes && typeof session.classes === 'object') {
+            className = session.classes.name || 'Unknown Class';
           }
           
           return {
@@ -85,6 +88,7 @@ const AttendanceRecords = () => {
     
     try {
       setLoading(true);
+      console.log('Loading records for session:', selectedSession);
       
       const { data, error } = await supabase
         .from('attendance_records')
@@ -104,8 +108,12 @@ const AttendanceRecords = () => {
         .eq('session_id', selectedSession)
         .order('timestamp', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching attendance records:', error);
+        throw error;
+      }
       
+      console.log('Fetched records:', data);
       setRecords(data || []);
     } catch (error: any) {
       console.error('Error fetching attendance records:', error);
