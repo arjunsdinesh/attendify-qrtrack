@@ -42,9 +42,13 @@ const ScanQR = () => {
         throw new Error('Invalid QR code format');
       }
       
-      // Check if the QR code is still valid (within 10 seconds)
+      // Check if the QR code is expired using the explicit expiration time
       const now = Date.now();
-      if (now - qrData.timestamp > 10000) {
+      
+      // If expiresAt is present, use it; otherwise, use the old timeout calculation (30 sec)
+      const expiration = qrData.expiresAt || (qrData.timestamp + 30000);
+      
+      if (now > expiration) {
         throw new Error('QR code has expired. Please scan a fresh code.');
       }
       
