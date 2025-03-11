@@ -42,6 +42,7 @@ const AttendanceRecords = () => {
             start_time,
             end_time,
             is_active,
+            class_id,
             classes(name)
           `)
           .eq('created_by', user.id)
@@ -50,13 +51,21 @@ const AttendanceRecords = () => {
         if (error) throw error;
         
         // Format the sessions data for display
-        const formattedSessions = data?.map(session => ({
-          id: session.id,
-          class_name: session.classes?.name || 'Unknown Class',
-          start_time: session.start_time,
-          end_time: session.end_time,
-          is_active: session.is_active
-        })) || [];
+        const formattedSessions = data?.map(session => {
+          // Extract class name safely
+          let className = 'Unknown Class';
+          if (session.classes && Array.isArray(session.classes) && session.classes.length > 0) {
+            className = session.classes[0].name || 'Unknown Class';
+          }
+          
+          return {
+            id: session.id,
+            class_name: className,
+            start_time: session.start_time,
+            end_time: session.end_time,
+            is_active: session.is_active
+          };
+        }) || [];
         
         setSessions(formattedSessions);
       } catch (error: any) {
