@@ -55,10 +55,15 @@ const AttendanceRecords = () => {
         const formattedSessions = data?.map(session => {
           // Extract class name safely
           let className = 'Unknown Class';
-          if (session.classes && Array.isArray(session.classes) && session.classes.length > 0) {
-            className = session.classes[0].name || 'Unknown Class';
-          } else if (session.classes && typeof session.classes === 'object') {
-            className = session.classes.name || 'Unknown Class';
+          
+          // Handle case where classes might be returned as an array or as an object
+          const classData = session.classes;
+          if (classData) {
+            if (Array.isArray(classData) && classData.length > 0) {
+              className = classData[0].name || 'Unknown Class';
+            } else if (typeof classData === 'object' && classData !== null) {
+              className = classData.name || 'Unknown Class';
+            }
           }
           
           return {

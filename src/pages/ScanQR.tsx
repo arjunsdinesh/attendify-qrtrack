@@ -87,8 +87,17 @@ const ScanQR = () => {
       
       if (existingRecord) {
         setSuccess(true);
+        
         // Extract class name from session data
-        const className = sessionData.classes?.name || 'Unknown Class';
+        let className = 'Unknown Class';
+        if (sessionData.classes) {
+          if (Array.isArray(sessionData.classes) && sessionData.classes.length > 0) {
+            className = sessionData.classes[0].name || 'Unknown Class';
+          } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
+            className = sessionData.classes.name || 'Unknown Class';
+          }
+        }
+        
         const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
         setSessionInfo({ className, date: sessionDate });
         toast.info('You have already marked your attendance for this session');
@@ -114,7 +123,15 @@ const ScanQR = () => {
       }
       
       // Extract class name from session data
-      const className = sessionData.classes?.name || 'Unknown Class';
+      let className = 'Unknown Class';
+      if (sessionData.classes) {
+        if (Array.isArray(sessionData.classes) && sessionData.classes.length > 0) {
+          className = sessionData.classes[0].name || 'Unknown Class';
+        } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
+          className = sessionData.classes.name || 'Unknown Class';
+        }
+      }
+      
       const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
       setSessionInfo({ className, date: sessionDate });
       

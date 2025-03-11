@@ -157,7 +157,7 @@ const AttendanceHistory = () => {
               </div>
             ) : (
               <div className="text-center p-8">
-                <Alert variant="warning" className="mb-4">
+                <Alert className="mb-4">
                   <AlertDescription>
                     You haven't marked attendance for any classes yet.
                   </AlertDescription>
