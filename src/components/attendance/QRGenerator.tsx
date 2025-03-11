@@ -14,7 +14,7 @@ interface QRGeneratorProps {
 
 export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorProps) => {
   const [qrValue, setQrValue] = useState<string>('');
-  const [timeLeft, setTimeLeft] = useState<number>(15); // Increased from 5 to 15 seconds
+  const [timeLeft, setTimeLeft] = useState<number>(30); // Increased from 15 to 30 seconds
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,9 +68,10 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         return;
       }
       
-      // Create the QR code data
+      // Create the QR code data with a longer expiration buffer
       const timestamp = Date.now();
-      const expiresAt = timestamp + (timeLeft * 1000); // Set explicit expiration time
+      // Add 5 extra seconds to account for network delays and clock differences
+      const expiresAt = timestamp + ((timeLeft + 5) * 1000); 
       
       const qrData = {
         sessionId,
@@ -96,13 +97,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
 
   // Timer for QR code refresh
   useEffect(() => {
-    // Set up timer to count down from 15 seconds
+    // Set up timer to count down from 30 seconds
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           // Time to generate a new QR code
           generateQRData();
-          return 15; // Reset to 15 seconds
+          return 30; // Reset to 30 seconds
         }
         return prev - 1;
       });
@@ -143,7 +144,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         </div>
       </div>
       <p className="text-sm text-center text-muted-foreground">
-        Show this QR code to your students. It will refresh automatically every 15 seconds.
+        Show this QR code to your students. It will refresh automatically every 30 seconds.
       </p>
       <Button 
         onClick={onEndSession}

@@ -17,6 +17,7 @@ const ScanQR = () => {
   const [scanning, setScanning] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sessionInfo, setSessionInfo] = useState<{ className: string; date: string } | null>(null);
   
   if (!user || user.role !== 'student') {
@@ -32,24 +33,29 @@ const ScanQR = () => {
       
       if (processing || success) return;
       
+      // Clear previous error
+      setError(null);
       setProcessing(true);
       
       // Parse the QR code data
-      const qrData = JSON.parse(data);
+      let qrData;
+      try {
+        qrData = JSON.parse(data);
+      } catch (e) {
+        throw new Error('Invalid QR code format. Please scan a valid attendance QR code.');
+      }
       
       // Check if the QR code contains all required fields
-      if (!qrData.sessionId || !qrData.timestamp || !qrData.signature) {
-        throw new Error('Invalid QR code format');
+      if (!qrData.sessionId || !qrData.timestamp || !qrData.signature || !qrData.expiresAt) {
+        throw new Error('Invalid QR code format. Missing required fields.');
       }
       
       // Check if the QR code is expired using the explicit expiration time
       const now = Date.now();
       
-      // If expiresAt is present, use it; otherwise, use the old timeout calculation (30 sec)
-      const expiration = qrData.expiresAt || (qrData.timestamp + 30000);
-      
-      if (now > expiration) {
-        throw new Error('QR code has expired. Please scan a fresh code.');
+      // Use the explicit expiration time from the QR code
+      if (now > qrData.expiresAt) {
+        throw new Error('QR code has expired. Please ask your teacher to generate a new code.');
       }
       
       console.log('Checking session:', qrData.sessionId);
@@ -67,11 +73,11 @@ const ScanQR = () => {
       
       if (sessionError) {
         console.error('Session query error:', sessionError);
-        throw sessionError;
+        throw new Error('Error verifying session. Please try again.');
       }
       
       if (!sessionData || !sessionData.is_active) {
-        throw new Error('This attendance session is no longer active');
+        throw new Error('This attendance session is no longer active.');
       }
       
       console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user.id);
@@ -86,25 +92,24 @@ const ScanQR = () => {
       
       if (existingError) {
         console.error('Existing record query error:', existingError);
-        throw existingError;
+        throw new Error('Error checking attendance record. Please try again.');
       }
+      
+      // Extract class name from session data
+      let className = 'Unknown Class';
+      if (sessionData.classes) {
+        if (Array.isArray(sessionData.classes)) {
+          className = sessionData.classes[0]?.name || 'Unknown Class';
+        } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
+          className = sessionData.classes.name || 'Unknown Class';
+        }
+      }
+      
+      const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
+      setSessionInfo({ className, date: sessionDate });
       
       if (existingRecord) {
         setSuccess(true);
-        
-        // Extract class name from session data
-        let className = 'Unknown Class';
-        if (sessionData.classes) {
-          if (Array.isArray(sessionData.classes) && sessionData.classes.length > 0) {
-            className = sessionData.classes[0]?.name || 'Unknown Class';
-          } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
-            // Need to check if the property 'name' exists on this object
-            className = 'name' in sessionData.classes ? (sessionData.classes.name as string) : 'Unknown Class';
-          }
-        }
-        
-        const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
-        setSessionInfo({ className, date: sessionDate });
         toast.info('You have already marked your attendance for this session');
         return;
       }
@@ -124,22 +129,8 @@ const ScanQR = () => {
       
       if (insertError) {
         console.error('Insert error:', insertError);
-        throw insertError;
+        throw new Error('Failed to record attendance. Please try again.');
       }
-      
-      // Extract class name from session data
-      let className = 'Unknown Class';
-      if (sessionData.classes) {
-        if (Array.isArray(sessionData.classes) && sessionData.classes.length > 0) {
-          className = sessionData.classes[0]?.name || 'Unknown Class';
-        } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
-          // Need to check if the property 'name' exists on this object
-          className = 'name' in sessionData.classes ? (sessionData.classes.name as string) : 'Unknown Class';
-        }
-      }
-      
-      const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
-      setSessionInfo({ className, date: sessionDate });
       
       toast.success('Attendance marked successfully!');
       setSuccess(true);
@@ -149,6 +140,7 @@ const ScanQR = () => {
       
     } catch (error: any) {
       console.error('Error processing QR code:', error);
+      setError(error.message || 'Failed to process QR code');
       toast.error(error.message || 'Failed to process QR code');
     } finally {
       setProcessing(false);
@@ -158,6 +150,7 @@ const ScanQR = () => {
   // Handle QR scanner errors
   const handleError = (error: any) => {
     console.error('QR scanner error:', error);
+    setError('Failed to access camera. Please check permissions.');
     toast.error('Failed to access camera. Please check permissions.');
     setScanning(false);
   };
@@ -166,6 +159,7 @@ const ScanQR = () => {
   const toggleScanner = () => {
     setScanning(prev => !prev);
     if (success) setSuccess(false);
+    if (error) setError(null);
     setSessionInfo(null);
   };
 
@@ -195,6 +189,15 @@ const ScanQR = () => {
                 <AlertTitle>Attendance Marked!</AlertTitle>
                 <AlertDescription>
                   Your attendance for <strong>{sessionInfo.className}</strong> on <strong>{sessionInfo.date}</strong> has been successfully recorded.
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {error && (
+              <Alert variant="destructive" className="mb-4 w-full">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>
+                  {error}
                 </AlertDescription>
               </Alert>
             )}
