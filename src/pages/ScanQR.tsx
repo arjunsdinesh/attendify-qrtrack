@@ -46,6 +46,8 @@ const ScanQR = () => {
         throw new Error('QR code has expired. Please scan a fresh code.');
       }
       
+      console.log('Checking session:', qrData.sessionId);
+      
       // Check if the session is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
@@ -53,11 +55,16 @@ const ScanQR = () => {
         .eq('id', qrData.sessionId)
         .maybeSingle();
       
-      if (sessionError) throw sessionError;
+      if (sessionError) {
+        console.error('Session query error:', sessionError);
+        throw sessionError;
+      }
       
       if (!sessionData || !sessionData.is_active) {
         throw new Error('This attendance session is no longer active');
       }
+      
+      console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user.id);
       
       // Check if attendance was already marked for this session
       const { data: existingRecord, error: existingError } = await supabase
@@ -67,13 +74,18 @@ const ScanQR = () => {
         .eq('student_id', user.id)
         .maybeSingle();
       
-      if (existingError) throw existingError;
+      if (existingError) {
+        console.error('Existing record query error:', existingError);
+        throw existingError;
+      }
       
       if (existingRecord) {
         toast.info('You have already marked your attendance for this session');
         setSuccess(true);
         return;
       }
+      
+      console.log('Creating attendance record for session:', qrData.sessionId, 'and student:', user.id);
       
       // Create attendance record
       const { error: insertError } = await supabase
@@ -82,11 +94,14 @@ const ScanQR = () => {
           {
             session_id: qrData.sessionId,
             student_id: user.id,
-            timestamp: new Date().toISOString(),
+            timestamp: new Date().toISOString()
           }
         ]);
       
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
       
       toast.success('Attendance marked successfully!');
       setSuccess(true);

@@ -26,15 +26,19 @@ const AttendanceHistory = () => {
       try {
         setLoading(true);
         
+        console.log('Fetching attendance records for student:', user.id);
+        
         const { data, error } = await supabase
           .from('attendance_records')
           .select(`
             id,
             timestamp,
+            session_id,
             attendance_sessions(
               id,
               start_time,
               end_time,
+              class_id,
               classes(
                 id,
                 name
@@ -44,8 +48,12 @@ const AttendanceHistory = () => {
           .eq('student_id', user.id)
           .order('timestamp', { ascending: false });
         
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching attendance records:', error);
+          throw error;
+        }
         
+        console.log('Fetched records:', data);
         setRecords(data || []);
       } catch (error: any) {
         console.error('Error fetching attendance records:', error);
@@ -61,6 +69,24 @@ const AttendanceHistory = () => {
   // Format date for display
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
+  };
+
+  // Get class name from record
+  const getClassName = (record: any) => {
+    if (record.attendance_sessions && 
+        record.attendance_sessions.classes && 
+        record.attendance_sessions.classes.name) {
+      return record.attendance_sessions.classes.name;
+    }
+    return '-';
+  };
+
+  // Get session date from record
+  const getSessionDate = (record: any) => {
+    if (record.attendance_sessions && record.attendance_sessions.start_time) {
+      return formatDate(record.attendance_sessions.start_time);
+    }
+    return '-';
   };
 
   if (!user) {
@@ -111,8 +137,8 @@ const AttendanceHistory = () => {
                   {records.map((record, index) => (
                     <div key={record.id} className="grid grid-cols-12 p-2 hover:bg-muted/50 rounded-md">
                       <div className="col-span-1">{index + 1}</div>
-                      <div className="col-span-4">{record.attendance_sessions?.classes?.name || '-'}</div>
-                      <div className="col-span-4">{formatDate(record.attendance_sessions?.start_time)}</div>
+                      <div className="col-span-4">{getClassName(record)}</div>
+                      <div className="col-span-4">{getSessionDate(record)}</div>
                       <div className="col-span-3">{formatDate(record.timestamp)}</div>
                     </div>
                   ))}
