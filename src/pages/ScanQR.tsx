@@ -51,11 +51,11 @@ const ScanQR = () => {
         .from('attendance_sessions')
         .select('is_active')
         .eq('id', qrData.sessionId)
-        .single();
+        .maybeSingle();
       
       if (sessionError) throw sessionError;
       
-      if (!sessionData.is_active) {
+      if (!sessionData || !sessionData.is_active) {
         throw new Error('This attendance session is no longer active');
       }
       

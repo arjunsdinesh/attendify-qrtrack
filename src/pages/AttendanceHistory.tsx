@@ -9,37 +9,11 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
 
-// Define the structure of the data returned from the Supabase query
-interface AttendanceSessionData {
-  id: string;
-  class_name: string;
-  start_time: string;
-  end_time: string;
-}
-
-interface AttendanceRecordData {
-  id: string;
-  timestamp: string;
-  attendance_sessions: AttendanceSessionData;
-}
-
-// Define the raw data structure as we receive it from Supabase
-interface RawAttendanceRecord {
-  id: string;
-  timestamp: string;
-  attendance_sessions: {
-    id: string;
-    class_name: string;
-    start_time: string;
-    end_time: string;
-  };
-}
-
 const AttendanceHistory = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [records, setRecords] = useState<AttendanceRecordData[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
   
   useEffect(() => {
     if (!user || user.role !== 'student') {
@@ -57,11 +31,14 @@ const AttendanceHistory = () => {
           .select(`
             id,
             timestamp,
-            attendance_sessions!inner(
+            attendance_sessions(
               id,
-              class_name,
               start_time,
-              end_time
+              end_time,
+              classes(
+                id,
+                name
+              )
             )
           `)
           .eq('student_id', user.id)
@@ -69,22 +46,7 @@ const AttendanceHistory = () => {
         
         if (error) throw error;
         
-        // Use proper type assertion
-        const rawData = data as unknown;
-        const typedData = rawData as RawAttendanceRecord[];
-        
-        const formattedRecords: AttendanceRecordData[] = typedData.map(record => ({
-          id: record.id,
-          timestamp: record.timestamp,
-          attendance_sessions: {
-            id: record.attendance_sessions.id,
-            class_name: record.attendance_sessions.class_name,
-            start_time: record.attendance_sessions.start_time,
-            end_time: record.attendance_sessions.end_time
-          }
-        }));
-        
-        setRecords(formattedRecords);
+        setRecords(data || []);
       } catch (error: any) {
         console.error('Error fetching attendance records:', error);
         toast.error('Failed to load attendance history');
@@ -100,6 +62,18 @@ const AttendanceHistory = () => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p>Loading...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -137,7 +111,7 @@ const AttendanceHistory = () => {
                   {records.map((record, index) => (
                     <div key={record.id} className="grid grid-cols-12 p-2 hover:bg-muted/50 rounded-md">
                       <div className="col-span-1">{index + 1}</div>
-                      <div className="col-span-4">{record.attendance_sessions?.class_name || '-'}</div>
+                      <div className="col-span-4">{record.attendance_sessions?.classes?.name || '-'}</div>
                       <div className="col-span-4">{formatDate(record.attendance_sessions?.start_time)}</div>
                       <div className="col-span-3">{formatDate(record.timestamp)}</div>
                     </div>

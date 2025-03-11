@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -20,26 +19,46 @@ const AttendanceRecords = () => {
   const [selectedSession, setSelectedSession] = useState<string>('');
   const [records, setRecords] = useState<any[]>([]);
   
-  if (!user || user.role !== 'teacher') {
-    navigate('/');
-    return null;
-  }
+  // Redirect if not authenticated or not a teacher
+  useEffect(() => {
+    if (!user || user.role !== 'teacher') {
+      navigate('/');
+      return;
+    }
+  }, [user, navigate]);
 
   // Load teacher's sessions
   useEffect(() => {
     const fetchSessions = async () => {
+      if (!user) return;
+      
       try {
         setLoading(true);
         
         const { data, error } = await supabase
           .from('attendance_sessions')
-          .select('*')
-          .eq('teacher_id', user.id)
+          .select(`
+            id,
+            start_time,
+            end_time,
+            is_active,
+            classes(name)
+          `)
+          .eq('created_by', user.id)
           .order('start_time', { ascending: false });
         
         if (error) throw error;
         
-        setSessions(data || []);
+        // Format the sessions data for display
+        const formattedSessions = data?.map(session => ({
+          id: session.id,
+          class_name: session.classes?.name || 'Unknown Class',
+          start_time: session.start_time,
+          end_time: session.end_time,
+          is_active: session.is_active
+        })) || [];
+        
+        setSessions(formattedSessions);
       } catch (error: any) {
         console.error('Error fetching sessions:', error);
         toast.error('Failed to load sessions');
@@ -66,9 +85,11 @@ const AttendanceRecords = () => {
           profiles:student_id (
             id,
             full_name,
-            register_number,
-            roll_number,
-            department
+            student_profiles (
+              register_number,
+              roll_number,
+              department
+            )
           )
         `)
         .eq('session_id', selectedSession)
@@ -98,6 +119,18 @@ const AttendanceRecords = () => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p>Loading...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -141,7 +174,7 @@ const AttendanceRecords = () => {
           </CardContent>
         </Card>
         
-        {loading ? (
+        {loading && selectedSession ? (
           <div className="flex justify-center p-8">
             <LoadingSpinner className="h-8 w-8" />
           </div>
@@ -167,9 +200,9 @@ const AttendanceRecords = () => {
                   <div key={record.id} className="grid grid-cols-12 p-2 hover:bg-muted/50 rounded-md">
                     <div className="col-span-1">{index + 1}</div>
                     <div className="col-span-3">{record.profiles?.full_name || '-'}</div>
-                    <div className="col-span-2">{record.profiles?.register_number || '-'}</div>
-                    <div className="col-span-2">{record.profiles?.roll_number || '-'}</div>
-                    <div className="col-span-2">{record.profiles?.department || '-'}</div>
+                    <div className="col-span-2">{record.profiles?.student_profiles?.[0]?.register_number || '-'}</div>
+                    <div className="col-span-2">{record.profiles?.student_profiles?.[0]?.roll_number || '-'}</div>
+                    <div className="col-span-2">{record.profiles?.student_profiles?.[0]?.department || '-'}</div>
                     <div className="col-span-2">{formatDate(record.timestamp)}</div>
                   </div>
                 ))}

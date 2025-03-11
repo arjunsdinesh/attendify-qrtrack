@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -128,7 +127,7 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
                   <FormItem>
                     <FormLabel>Register Number</FormLabel>
                     <FormControl>
-                      <Input {...field} readOnly className="bg-muted" />
+                      <Input {...field} className="input-focus-ring" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -170,6 +169,7 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
                   <Select
                     onValueChange={(value) => field.onChange(parseInt(value))}
                     defaultValue={field.value.toString()}
+                    value={field.value.toString()}
                   >
                     <FormControl>
                       <SelectTrigger>
