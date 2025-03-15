@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -10,12 +11,6 @@ import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
-interface SessionData {
-  is_active: boolean;
-  classes: { name: string } | { name: string }[] | null;
-  start_time: string;
-}
-
 const ScanQR = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -24,78 +19,104 @@ const ScanQR = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionInfo, setSessionInfo] = useState<{ className: string; date: string } | null>(null);
-
+  
   if (!user || user.role !== 'student') {
     navigate('/');
     return null;
   }
 
+  // Handle successful QR code scan
   const handleScan = async (result: any) => {
     try {
+      // Extract the data from the scanned QR code
       const data = result[0]?.rawValue || '';
+      
       if (processing || success) return;
+      
+      // Clear previous error
       setError(null);
       setProcessing(true);
-
+      
+      // Parse the QR code data
       let qrData;
       try {
         qrData = JSON.parse(data);
       } catch (e) {
         throw new Error('Invalid QR code format. Please scan a valid attendance QR code.');
       }
-
+      
+      // Check if the QR code contains all required fields
       if (!qrData.sessionId || !qrData.timestamp || !qrData.signature || !qrData.expiresAt) {
         throw new Error('Invalid QR code format. Missing required fields.');
       }
-
+      
+      // Check if the QR code is expired using the explicit expiration time
       const now = Date.now();
+      
+      // Use the explicit expiration time from the QR code
       if (now > qrData.expiresAt) {
         throw new Error('QR code has expired. Please ask your teacher to generate a new code.');
       }
-
+      
+      console.log('Checking session:', qrData.sessionId);
+      
+      // Check if the session is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select<SessionData>('is_active, classes(name), start_time')
+        .select(`
+          is_active,
+          classes(name),
+          start_time
+        `)
         .eq('id', qrData.sessionId)
         .maybeSingle();
-
+      
       if (sessionError) {
+        console.error('Session query error:', sessionError);
         throw new Error('Error verifying session. Please try again.');
       }
-
+      
       if (!sessionData || !sessionData.is_active) {
         throw new Error('This attendance session is no longer active.');
       }
-
-      let className = 'Unknown Class';
-      if (sessionData.classes) {
-        if (Array.isArray(sessionData.classes)) {
-          className = sessionData.classes[0]?.name || 'Unknown Class';
-        } else {
-          className = sessionData.classes.name || 'Unknown Class';
-        }
-      }
-
-      const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
-      setSessionInfo({ className, date: sessionDate });
-
+      
+      console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user.id);
+      
+      // Check if attendance was already marked for this session
       const { data: existingRecord, error: existingError } = await supabase
         .from('attendance_records')
         .select('id')
         .eq('session_id', qrData.sessionId)
         .eq('student_id', user.id)
         .maybeSingle();
-
+      
       if (existingError) {
+        console.error('Existing record query error:', existingError);
         throw new Error('Error checking attendance record. Please try again.');
       }
-
+      
+      // Extract class name from session data
+      let className = 'Unknown Class';
+      if (sessionData.classes) {
+        if (Array.isArray(sessionData.classes)) {
+          className = sessionData.classes[0]?.name || 'Unknown Class';
+        } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
+          className = sessionData.classes.name || 'Unknown Class';
+        }
+      }
+      
+      const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
+      setSessionInfo({ className, date: sessionDate });
+      
       if (existingRecord) {
         setSuccess(true);
         toast.info('You have already marked your attendance for this session');
         return;
       }
-
+      
+      console.log('Creating attendance record for session:', qrData.sessionId, 'and student:', user.id);
+      
+      // Create attendance record
       const { error: insertError } = await supabase
         .from('attendance_records')
         .insert([
@@ -105,15 +126,20 @@ const ScanQR = () => {
             timestamp: new Date().toISOString()
           }
         ]);
-
+      
       if (insertError) {
+        console.error('Insert error:', insertError);
         throw new Error('Failed to record attendance. Please try again.');
       }
-
+      
       toast.success('Attendance marked successfully!');
       setSuccess(true);
+      
+      // Automatically stop scanning after successful scan
       setScanning(false);
+      
     } catch (error: any) {
+      console.error('Error processing QR code:', error);
       setError(error.message || 'Failed to process QR code');
       toast.error(error.message || 'Failed to process QR code');
     } finally {
@@ -121,12 +147,15 @@ const ScanQR = () => {
     }
   };
 
+  // Handle QR scanner errors
   const handleError = (error: any) => {
+    console.error('QR scanner error:', error);
     setError('Failed to access camera. Please check permissions.');
     toast.error('Failed to access camera. Please check permissions.');
     setScanning(false);
   };
 
+  // Toggle scanning state
   const toggleScanner = () => {
     setScanning(prev => !prev);
     if (success) setSuccess(false);
@@ -222,4 +251,3 @@ const ScanQR = () => {
 };
 
 export default ScanQR;
-
