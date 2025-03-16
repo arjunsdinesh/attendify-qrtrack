@@ -18,24 +18,12 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Generate a cryptographically secure random secret
-  const generateSecret = () => {
-    const array = new Uint32Array(4);
-    crypto.getRandomValues(array);
-    return Array.from(array, x => x.toString(16)).join('');
-  };
-
-  // Create a secure signature for the QR data
+  // Create a simple signature for verification
   const createSignature = (data: any, secret: string) => {
     const stringData = JSON.stringify(data);
-    // In a real app, you would use a proper crypto library to create an HMAC
+    // Simple signature (in production, use a proper HMAC)
     return btoa(stringData + secret).substring(0, 16);
   };
-
-  // Log the sessionId to help with debugging
-  useEffect(() => {
-    console.log('QRGenerator initialized with sessionId:', sessionId);
-  }, [sessionId]);
 
   // Generate new QR code data
   const generateQRData = async () => {

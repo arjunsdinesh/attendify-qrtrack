@@ -53,10 +53,12 @@ const QRCodeScanner = () => {
         throw new Error('QR code has expired. Please scan a fresh code.');
       }
       
+      console.log('Checking session: ', qrData.sessionId);
+      
       // Check if the session is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('is_active, id')
+        .select('is_active, id, class_id')
         .eq('id', qrData.sessionId)
         .maybeSingle();
       
@@ -72,6 +74,7 @@ const QRCodeScanner = () => {
       
       console.log('Session data found:', {
         id: sessionData.id,
+        classId: sessionData.class_id,
         isActive: sessionData.is_active
       });
       

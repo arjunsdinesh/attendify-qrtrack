@@ -53,8 +53,7 @@ const ScanQR = () => {
         throw new Error('Invalid QR code format. Please scan a valid attendance QR code.');
       }
       
-      // Check required fields - note we're checking for sessionId and timestamp, but signature is optional
-      // in case the format changes in the future
+      // Check required fields
       if (!qrData.sessionId || !qrData.timestamp) {
         console.error('QR missing fields:', qrData);
         throw new Error('Invalid QR code format. Missing required fields.');
