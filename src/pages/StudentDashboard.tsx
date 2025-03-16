@@ -21,7 +21,7 @@ const StudentDashboard = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <AnimatedHeading className="text-3xl md:text-4xl font-bold text-gray-800">
-              Welcome, {user.first_name || 'Student'}
+              Welcome, {user.full_name ? user.full_name.split(' ')[0] : 'Student'}
             </AnimatedHeading>
             <AnimatedText delay={100} className="text-gray-600 mt-1">
               What would you like to do today?
