@@ -48,17 +48,24 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           setSessionId(data.id);
           setClassId(data.class_id);
           
-          // Extract class name
-          let name = 'Unknown Class';
+          // Extract class name - safely handling the type
           if (data.classes) {
+            let className = 'Unknown Class';
+            
+            // Handle case where it might be an array due to Supabase join
             if (Array.isArray(data.classes)) {
-              name = data.classes[0]?.name || 'Unknown Class';
-            } else if (typeof data.classes === 'object' && data.classes !== null) {
-              name = data.classes.name || 'Unknown Class';
+              className = data.classes[0]?.name || 'Unknown Class';
+            } 
+            // Handle case where it's a single object
+            else if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
+              className = data.classes.name as string;
             }
+            
+            setClassName(className);
+          } else {
+            setClassName('Unknown Class');
           }
           
-          setClassName(name);
           setActive(true);
         }
       } catch (error: any) {

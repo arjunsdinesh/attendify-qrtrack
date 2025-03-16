@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,10 +20,11 @@ const ScanQR = () => {
   const [error, setError] = useState<string | null>(null);
   const [sessionInfo, setSessionInfo] = useState<{ className: string; date: string } | null>(null);
   
-  if (!user || user.role !== 'student') {
-    navigate('/');
-    return null;
-  }
+  useEffect(() => {
+    if (user && user.role !== 'student') {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   // Handle successful QR code scan
   const handleScan = async (result: any) => {
@@ -84,7 +85,11 @@ const ScanQR = () => {
         throw new Error('This attendance session is no longer active. Please ask your teacher to start a new session.');
       }
       
-      console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user.id);
+      console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user?.id);
+      
+      if (!user) {
+        throw new Error('User authentication required. Please log in and try again.');
+      }
       
       // Check if attendance was already marked for this session
       const { data: existingRecord, error: existingError } = await supabase
@@ -99,13 +104,16 @@ const ScanQR = () => {
         throw new Error('Error checking attendance record. Please try again.');
       }
       
-      // Extract class name from session data
+      // Extract class name from session data - safely handling the type
       let className = 'Unknown Class';
       if (sessionData.classes) {
+        // Handle case where it might be an array due to Supabase join
         if (Array.isArray(sessionData.classes)) {
           className = sessionData.classes[0]?.name || 'Unknown Class';
-        } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
-          className = sessionData.classes.name || 'Unknown Class';
+        } 
+        // Handle case where it's a single object
+        else if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
+          className = sessionData.classes.name as string;
         }
       }
       
@@ -166,6 +174,18 @@ const ScanQR = () => {
     if (error) setError(null);
     setSessionInfo(null);
   };
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p>Loading...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
