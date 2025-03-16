@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { LoadingSpinner } from '@/components/ui-components';
-import { AlertCircle, X } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Registration form schema
@@ -90,22 +90,10 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
     setShowRegisterNumber(value === 'student');
   };
 
-  const clearEmail = () => {
-    registerForm.setValue('email', '');
-  };
-
-  const clearFullName = () => {
-    registerForm.setValue('fullName', '');
-  };
-
-  const clearRegisterNumber = () => {
-    registerForm.setValue('registerNumber', '');
-  };
-
   return (
     <>
       {formError && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{formError}</AlertDescription>
         </Alert>
@@ -122,10 +110,8 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                 <FormControl>
                   <Input 
                     placeholder="John Doe" 
-                    clearable
-                    onClear={clearFullName}
                     {...field} 
-                    className="bg-background border-gray-200"
+                    className="input-focus-ring"
                   />
                 </FormControl>
                 <FormMessage />
@@ -142,10 +128,8 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                   <Input 
                     placeholder="your.email@example.com" 
                     type="email" 
-                    clearable
-                    onClear={clearEmail}
                     {...field} 
-                    className="bg-background border-gray-200"
+                    className="input-focus-ring"
                   />
                 </FormControl>
                 <FormMessage />
@@ -165,9 +149,9 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                       handleRoleChange(value as 'student' | 'teacher');
                     }}
                     defaultValue={field.value}
-                    className="flex space-x-4"
+                    className="flex space-x-2"
                   >
-                    <FormItem className="flex items-center space-x-2 space-y-0">
+                    <FormItem className="flex items-center space-x-1 space-y-0">
                       <FormControl>
                         <RadioGroupItem value="student" />
                       </FormControl>
@@ -175,7 +159,7 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                         Student
                       </FormLabel>
                     </FormItem>
-                    <FormItem className="flex items-center space-x-2 space-y-0">
+                    <FormItem className="flex items-center space-x-1 space-y-0">
                       <FormControl>
                         <RadioGroupItem value="teacher" />
                       </FormControl>
@@ -200,10 +184,8 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                   <FormControl>
                     <Input 
                       placeholder="Enter your university register number" 
-                      clearable
-                      onClear={clearRegisterNumber}
                       {...field} 
-                      className="bg-background border-gray-200"
+                      className="input-focus-ring"
                     />
                   </FormControl>
                   <FormMessage />
@@ -223,7 +205,7 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                     placeholder="Create a password" 
                     type="password" 
                     {...field} 
-                    className="bg-background border-gray-200"
+                    className="input-focus-ring"
                   />
                 </FormControl>
                 <FormMessage />
@@ -241,7 +223,7 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
                     placeholder="Confirm your password" 
                     type="password" 
                     {...field} 
-                    className="bg-background border-gray-200"
+                    className="input-focus-ring"
                   />
                 </FormControl>
                 <FormMessage />
@@ -250,7 +232,7 @@ const RegisterForm = ({ connectionStatus }: RegisterFormProps) => {
           />
           <Button 
             type="submit" 
-            className="w-full h-12 mt-4 bg-black hover:bg-gray-800 text-white font-medium text-base rounded-lg" 
+            className="w-full bg-brand-500 hover:bg-brand-600" 
             disabled={loading}
           >
             {loading ? <LoadingSpinner /> : 'Create Account'}

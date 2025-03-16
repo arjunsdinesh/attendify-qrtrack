@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui-components';
-import { AlertCircle, Mail, X } from 'lucide-react';
+import { AlertCircle, Mail } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Login form schema
@@ -56,19 +56,15 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
         setUnconfirmedEmail(values.email);
         setFormError('Your email has not been confirmed. Please check your inbox for the confirmation link.');
       } else {
-        setFormError(error.message || 'Failed to sign in. Please check your credentials.');
+        setFormError(error.message || 'Failed to sign in. Please check your Supabase configuration.');
       }
     }
-  };
-
-  const clearEmail = () => {
-    loginForm.setValue('email', '');
   };
 
   return (
     <>
       {isEmailNotConfirmed && (
-        <Alert variant="warning" className="mb-6 bg-amber-50 border-amber-200">
+        <Alert variant="warning" className="mb-4 bg-amber-50 border-amber-200">
           <Mail className="h-4 w-4" />
           <AlertTitle>Email confirmation required</AlertTitle>
           <AlertDescription>
@@ -78,7 +74,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
       )}
         
       {formError && !isEmailNotConfirmed && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{formError}</AlertDescription>
         </Alert>
@@ -96,10 +92,8 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                   <Input 
                     placeholder="your.email@example.com" 
                     type="email" 
-                    clearable
-                    onClear={clearEmail}
                     {...field} 
-                    className="bg-background border-gray-200"
+                    className="input-focus-ring"
                   />
                 </FormControl>
                 <FormMessage />
@@ -114,10 +108,10 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                 <FormLabel>Password</FormLabel>
                 <FormControl>
                   <Input 
-                    placeholder="Enter your password" 
+                    placeholder="Your password" 
                     type="password" 
                     {...field} 
-                    className="bg-background border-gray-200"
+                    className="input-focus-ring"
                   />
                 </FormControl>
                 <FormMessage />
@@ -126,10 +120,10 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
           />
           <Button 
             type="submit" 
-            className="w-full h-12 mt-4 bg-black hover:bg-gray-800 text-white font-medium text-base rounded-lg" 
+            className="w-full bg-brand-500 hover:bg-brand-600" 
             disabled={loading}
           >
-            {loading ? <LoadingSpinner /> : 'Continue'}
+            {loading ? <LoadingSpinner /> : 'Sign In'}
           </Button>
         </form>
       </Form>
