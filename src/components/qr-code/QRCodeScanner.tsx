@@ -29,28 +29,51 @@ const QRCodeScanner = () => {
       
       setProcessing(true);
       
-      // Parse the QR code data
-      const qrData = JSON.parse(data);
+      console.log('Scanned QR data (raw):', data);
       
-      // Check if the QR code contains all required fields
-      if (!qrData.sessionId || !qrData.timestamp || !qrData.signature) {
+      // Parse the QR code data
+      let qrData;
+      try {
+        qrData = JSON.parse(data);
+        console.log('Parsed QR data:', qrData);
+      } catch (e) {
+        console.error('QR parse error:', e);
         throw new Error('Invalid QR code format');
       }
       
-      // Check if the QR code is still valid (within 10 seconds)
+      // Check if the QR code contains the required fields
+      if (!qrData.sessionId || !qrData.timestamp) {
+        console.error('QR missing fields:', qrData);
+        throw new Error('Invalid QR code format');
+      }
+      
+      // Check if the QR code has expired
       const now = Date.now();
-      if (now - qrData.timestamp > 10000) {
+      if (qrData.expiresAt && now > qrData.expiresAt) {
         throw new Error('QR code has expired. Please scan a fresh code.');
       }
       
       // Check if the session is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('is_active')
+        .select('is_active, id')
         .eq('id', qrData.sessionId)
-        .single();
+        .maybeSingle();
       
-      if (sessionError) throw sessionError;
+      if (sessionError) {
+        console.error('Session query error:', sessionError);
+        throw sessionError;
+      }
+      
+      if (!sessionData) {
+        console.error('Session not found:', qrData.sessionId);
+        throw new Error('Attendance session not found. Please scan a valid QR code.');
+      }
+      
+      console.log('Session data found:', {
+        id: sessionData.id,
+        isActive: sessionData.is_active
+      });
       
       if (!sessionData.is_active) {
         throw new Error('This attendance session is no longer active');
@@ -73,6 +96,8 @@ const QRCodeScanner = () => {
         return;
       }
       
+      console.log('Recording attendance for session:', qrData.sessionId);
+      
       // Create attendance record
       const { error: insertError } = await supabase
         .from('attendance_records')
@@ -84,7 +109,12 @@ const QRCodeScanner = () => {
           }
         ]);
       
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
+      
+      console.log('Attendance recorded successfully');
       
       // Mark as recently marked to prevent multiple submissions
       setRecentlyMarked(true);
