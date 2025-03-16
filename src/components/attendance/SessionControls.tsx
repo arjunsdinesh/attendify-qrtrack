@@ -88,7 +88,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         .select('id')
         .eq('class_id', selectedClassId)
         .eq('is_active', true)
-        .maybeSingle();  // Changed from single() to maybeSingle()
+        .maybeSingle();  // Using maybeSingle() instead of single()
         
       if (existingSessionError) {
         console.error('Error checking existing sessions:', existingSessionError);
@@ -125,7 +125,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           date: new Date().toISOString().split('T')[0]
         })
         .select()
-        .maybeSingle(); // Changed from single() to maybeSingle()
+        .maybeSingle(); // Using maybeSingle() instead of single()
       
       if (error) {
         console.error('Supabase insert error:', error);
