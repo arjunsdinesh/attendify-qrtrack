@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -39,14 +40,21 @@ const ScanQR = () => {
       setError(null);
       setProcessing(true);
       
+      // Log raw QR code data for debugging
+      console.log('Scanned QR data (raw):', data);
+      
       let qrData;
       try {
         qrData = JSON.parse(data);
+        console.log('Parsed QR data:', qrData);
       } catch (e) {
+        console.error('QR parse error:', e);
         throw new Error('Invalid QR code format. Please scan a valid attendance QR code.');
       }
       
+      // Check required fields
       if (!qrData.sessionId || !qrData.timestamp || !qrData.signature || !qrData.expiresAt) {
+        console.error('QR missing fields:', qrData);
         throw new Error('Invalid QR code format. Missing required fields.');
       }
       
@@ -58,12 +66,14 @@ const ScanQR = () => {
       
       console.log('Checking session:', qrData.sessionId);
       
+      // Query for the session to verify it exists and is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select(`
           is_active,
           classes(name),
-          start_time
+          start_time,
+          id
         `)
         .eq('id', qrData.sessionId)
         .maybeSingle();
@@ -74,18 +84,24 @@ const ScanQR = () => {
       }
       
       if (!sessionData) {
+        console.error('Session not found:', qrData.sessionId);
         throw new Error('Attendance session not found. Please scan a valid QR code.');
       }
+      
+      console.log('Session data found:', {
+        id: sessionData.id,
+        isActive: sessionData.is_active
+      });
       
       if (!sessionData.is_active) {
         throw new Error('This attendance session is no longer active. Please ask your teacher to start a new session.');
       }
       
-      console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user?.id);
-      
       if (!user) {
         throw new Error('User authentication required. Please log in and try again.');
       }
+      
+      console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user?.id);
       
       const { data: existingRecord, error: existingError } = await supabase
         .from('attendance_records')
@@ -119,6 +135,9 @@ const ScanQR = () => {
         return;
       }
       
+      console.log('Recording attendance for session:', qrData.sessionId);
+      
+      // Record the attendance
       const { error: insertError } = await supabase
         .from('attendance_records')
         .insert([
@@ -134,6 +153,7 @@ const ScanQR = () => {
         throw new Error('Failed to record attendance. Please try again.');
       }
       
+      console.log('Attendance recorded successfully');
       toast.success('Attendance marked successfully!');
       setSuccess(true);
       

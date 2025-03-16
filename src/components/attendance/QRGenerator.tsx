@@ -32,18 +32,33 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     return btoa(stringData + secret).substring(0, 16);
   };
 
+  // Log the sessionId to help with debugging
+  useEffect(() => {
+    console.log('QRGenerator initialized with sessionId:', sessionId);
+  }, [sessionId]);
+
   // Generate new QR code data
   const generateQRData = async () => {
     try {
-      if (!sessionId) return;
+      if (!sessionId) {
+        console.error('No sessionId provided to QRGenerator');
+        setError('Missing session ID');
+        return;
+      }
       
       setGenerating(true);
       setError(null);
       
+      console.log('Generating QR code for session:', sessionId);
+      
       // Check if the session still exists and is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('qr_secret, is_active')
+        .select(`
+          qr_secret, 
+          is_active,
+          id
+        `)
         .eq('id', sessionId)
         .maybeSingle();
       
@@ -54,10 +69,16 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       }
       
       if (!sessionData) {
+        console.error('Session not found:', sessionId);
         setError('Session not found');
         onEndSession(); // End the session if it doesn't exist
         return;
       }
+      
+      console.log('Session data found:', {
+        id: sessionData.id,
+        isActive: sessionData.is_active
+      });
       
       // Ensure the session is still active
       if (!sessionData.is_active) {
@@ -83,13 +104,22 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         sessionId,
         timestamp,
         expiresAt,
-        classId: className // Using className as classId for simplicity
+        signature: '' // Will be filled in below
       };
       
       // Generate a signature to verify the QR code hasn't been tampered with
       const signature = createSignature(qrData, secret);
       
       const finalData = { ...qrData, signature };
+      
+      // Log the QR data for debugging (without the secret)
+      console.log('Generated QR data:', {
+        sessionId: finalData.sessionId,
+        timestamp: finalData.timestamp,
+        expiresAt: finalData.expiresAt,
+        hasSignature: !!finalData.signature
+      });
+      
       setQrValue(JSON.stringify(finalData));
       
     } catch (error: any) {
