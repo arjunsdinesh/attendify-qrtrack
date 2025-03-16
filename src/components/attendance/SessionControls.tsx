@@ -6,6 +6,7 @@ import { supabase } from '@/utils/supabase';
 import { QRGenerator } from './QRGenerator';
 import { SessionForm } from './SessionForm';
 import { useSearchParams } from 'react-router-dom';
+import { LoadingSpinner } from '@/components/ui-components';
 
 interface SessionControlsProps {
   userId: string;
@@ -22,6 +23,53 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [classes, setClasses] = useState<any[]>([]);
   const [isLoadingClasses, setIsLoadingClasses] = useState<boolean>(false);
+  const [checkingActiveSession, setCheckingActiveSession] = useState<boolean>(true);
+
+  // Check for an active session when component mounts
+  useEffect(() => {
+    const checkForActiveSession = async () => {
+      if (!userId) return;
+      
+      try {
+        setCheckingActiveSession(true);
+        
+        // Check if the teacher has any active sessions
+        const { data, error } = await supabase
+          .from('attendance_sessions')
+          .select('id, class_id, classes(name)')
+          .eq('created_by', userId)
+          .eq('is_active', true)
+          .maybeSingle();
+        
+        if (error) throw error;
+        
+        // If an active session exists, restore it
+        if (data) {
+          setSessionId(data.id);
+          setClassId(data.class_id);
+          
+          // Extract class name
+          let name = 'Unknown Class';
+          if (data.classes) {
+            if (Array.isArray(data.classes)) {
+              name = data.classes[0]?.name || 'Unknown Class';
+            } else if (typeof data.classes === 'object' && data.classes !== null) {
+              name = data.classes.name || 'Unknown Class';
+            }
+          }
+          
+          setClassName(name);
+          setActive(true);
+        }
+      } catch (error: any) {
+        console.error('Error checking active sessions:', error);
+      } finally {
+        setCheckingActiveSession(false);
+      }
+    };
+    
+    checkForActiveSession();
+  }, [userId]);
 
   // Fetch teacher's classes when component mounts
   useEffect(() => {
@@ -82,6 +130,27 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
+      // Check if the teacher already has an active session
+      const { data: existingSession, error: checkError } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('created_by', userId)
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error('Error checking existing sessions:', checkError);
+        throw new Error('Failed to check existing sessions');
+      }
+      
+      // If there's an existing session, use it instead of creating a new one
+      if (existingSession) {
+        setSessionId(existingSession.id);
+        setActive(true);
+        toast.info('Resumed existing attendance session');
+        return;
+      }
+      
       // Generate a new secret for this session
       const secret = generateSecret();
       
@@ -104,7 +173,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           date: new Date().toISOString().split('T')[0]
         })
         .select()
-        .single();
+        .maybeSingle();
       
       if (error) {
         console.error('Supabase insert error:', error);
@@ -144,6 +213,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       if (error) throw error;
       
       setActive(false);
+      setSessionId(null);
       toast.success('Attendance tracking stopped');
     } catch (error: any) {
       console.error('Error stopping attendance tracking:', error);
@@ -152,6 +222,17 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setIsLoading(false);
     }
   };
+
+  if (checkingActiveSession) {
+    return (
+      <Card className="w-full">
+        <CardContent className="flex items-center justify-center py-12">
+          <LoadingSpinner className="h-8 w-8" />
+          <span className="ml-2">Checking active sessions...</span>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full">

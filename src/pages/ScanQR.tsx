@@ -60,7 +60,7 @@ const ScanQR = () => {
       
       console.log('Checking session:', qrData.sessionId);
       
-      // Check if the session is active
+      // Check if the session exists and get its details first
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select(`
@@ -76,8 +76,12 @@ const ScanQR = () => {
         throw new Error('Error verifying session. Please try again.');
       }
       
-      if (!sessionData || !sessionData.is_active) {
-        throw new Error('This attendance session is no longer active.');
+      if (!sessionData) {
+        throw new Error('Attendance session not found. Please scan a valid QR code.');
+      }
+      
+      if (!sessionData.is_active) {
+        throw new Error('This attendance session is no longer active. Please ask your teacher to start a new session.');
       }
       
       console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user.id);

@@ -14,7 +14,7 @@ interface QRGeneratorProps {
 
 export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorProps) => {
   const [qrValue, setQrValue] = useState<string>('');
-  const [timeLeft, setTimeLeft] = useState<number>(30); // Increased from 15 to 30 seconds
+  const [timeLeft, setTimeLeft] = useState<number>(30); // 30 seconds
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +40,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       setGenerating(true);
       setError(null);
       
-      // Get the current session's secret from the database
+      // Check if the session still exists and is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select('qr_secret, is_active')
@@ -53,14 +53,20 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         throw sessionError;
       }
       
+      if (!sessionData) {
+        setError('Session not found');
+        onEndSession(); // End the session if it doesn't exist
+        return;
+      }
+      
       // Ensure the session is still active
-      if (!sessionData?.is_active) {
+      if (!sessionData.is_active) {
         setError('This session is no longer active');
         onEndSession(); // End the session if it's not active
         return;
       }
       
-      const secret = sessionData?.qr_secret || '';
+      const secret = sessionData.qr_secret || '';
       
       if (!secret) {
         console.error('QR secret not found for session');
