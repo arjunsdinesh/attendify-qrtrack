@@ -7,6 +7,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import { QrCode, X, CheckCircle2 } from 'lucide-react';
 
 const QRCodeScanner = () => {
   const { user } = useAuth();
@@ -149,18 +150,21 @@ const QRCodeScanner = () => {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto overflow-hidden">
-      <CardHeader>
-        <CardTitle>Mark Attendance</CardTitle>
-        <CardDescription>
+    <Card className="w-full max-w-md mx-auto overflow-hidden shadow-lg border border-gray-100">
+      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-sky-50">
+        <CardTitle className="text-xl flex items-center gap-2 text-gray-800">
+          <QrCode className="h-5 w-5 text-brand-600" />
+          Mark Attendance
+        </CardTitle>
+        <CardDescription className="text-gray-600">
           {scanning 
             ? 'Scan the QR code shown by your teacher'
             : 'Start scanning to mark your attendance'}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col items-center space-y-4">
+      <CardContent className="flex flex-col items-center space-y-5 p-6">
         {scanning ? (
-          <div className="w-full aspect-square rounded-lg overflow-hidden">
+          <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-inner border border-gray-200">
             <Scanner
               onScan={handleScan}
               onError={handleError}
@@ -168,19 +172,17 @@ const QRCodeScanner = () => {
               constraints={{ facingMode: 'environment' }}
             />
             {processing && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
-                <LoadingSpinner className="h-8 w-8" />
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-xl backdrop-blur-sm">
+                <LoadingSpinner className="h-10 w-10 border-4" />
               </div>
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-12 w-full aspect-square bg-gray-100 rounded-lg">
-            <div className="text-4xl text-muted-foreground mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 8v.5M15 12v.5M15 16v.5M9 8h1M9 12h1M9 16h1M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5Z" />
-              </svg>
+          <div className="flex flex-col items-center justify-center py-12 w-full aspect-square bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+            <div className="text-4xl text-brand-500 mb-4">
+              <QrCode size={64} strokeWidth={1.5} />
             </div>
-            <p className="text-center text-muted-foreground px-8">
+            <p className="text-center text-gray-600 px-8 max-w-xs">
               Click the button below to activate the camera and scan your attendance QR code.
             </p>
           </div>
@@ -188,22 +190,40 @@ const QRCodeScanner = () => {
         
         <Button 
           onClick={toggleScanner}
-          className={`w-full ${scanning ? 'bg-destructive hover:bg-destructive/90' : 'bg-brand-500 hover:bg-brand-600'}`}
+          className={`w-full py-6 text-base font-medium ${scanning ? 'bg-red-500 hover:bg-red-600' : 'bg-brand-600 hover:bg-brand-700'} rounded-xl transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1`}
           disabled={processing || recentlyMarked}
         >
           {processing ? (
-            <LoadingSpinner className="h-4 w-4" />
+            <LoadingSpinner className="h-5 w-5" />
           ) : recentlyMarked ? (
-            'Attendance Marked ✓'
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Attendance Marked
+            </span>
           ) : (
-            scanning ? 'Cancel Scanning' : 'Start Scanning'
+            <span className="flex items-center gap-2">
+              {scanning ? (
+                <>
+                  <X className="h-5 w-5" />
+                  Cancel Scanning
+                </>
+              ) : (
+                <>
+                  <QrCode className="h-5 w-5" />
+                  Start Scanning
+                </>
+              )}
+            </span>
           )}
         </Button>
         
         {recentlyMarked && (
-          <p className="text-sm text-teal-500 text-center">
-            Your attendance has been successfully recorded.
-          </p>
+          <div className="bg-teal-50 text-teal-700 rounded-lg p-4 border border-teal-200 w-full text-center animate-fade-in">
+            <CheckCircle2 className="h-5 w-5 mx-auto mb-2" />
+            <p className="text-sm font-medium">
+              Your attendance has been successfully recorded.
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>

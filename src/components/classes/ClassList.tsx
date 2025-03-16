@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/ui-components';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import CreateClassDialog from './CreateClassDialog';
+import { BookOpen, Plus } from 'lucide-react';
 
 interface ClassListProps {
   classes: any[];
@@ -20,21 +21,30 @@ const ClassList = ({
 }: ClassListProps) => {
   if (classes.length === 0) {
     return (
-      <div className="text-center p-8 bg-muted/50 rounded-lg">
-        <h3 className="font-medium mb-2">No Classes Yet</h3>
-        <p className="text-muted-foreground mb-4">Create your first class to start tracking attendance.</p>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>Create New Class</Button>
-          </DialogTrigger>
-          <CreateClassDialog onCreateClass={onCreateClass} />
-        </Dialog>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+        <EmptyState
+          title="No Classes Yet"
+          description="Create your first class to start tracking attendance"
+          icon={<BookOpen className="h-12 w-12 text-gray-300" />}
+          action={
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="mt-2 bg-brand-600 hover:bg-brand-700 flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create New Class
+                </Button>
+              </DialogTrigger>
+              <CreateClassDialog onCreateClass={onCreateClass} />
+            </Dialog>
+          }
+          className="py-16"
+        />
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {classes.map((classItem) => (
         <ClassCard key={classItem.id} classItem={classItem} />
       ))}
