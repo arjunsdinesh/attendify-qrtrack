@@ -33,6 +33,7 @@ const ScanQR = () => {
 
   const handleScan = async (result: any) => {
     try {
+      // Extract the data from the scanned QR code
       const data = result[0]?.rawValue || '';
       
       if (processing || success) return;
@@ -53,14 +54,15 @@ const ScanQR = () => {
       }
       
       // Check required fields
-      if (!qrData.sessionId || !qrData.timestamp || !qrData.signature || !qrData.expiresAt) {
+      if (!qrData.sessionId || !qrData.timestamp || !qrData.signature) {
         console.error('QR missing fields:', qrData);
         throw new Error('Invalid QR code format. Missing required fields.');
       }
       
       const now = Date.now();
       
-      if (now > qrData.expiresAt) {
+      // Check if the QR code has expired
+      if (qrData.expiresAt && now > qrData.expiresAt) {
         throw new Error('QR code has expired. Please ask your teacher to generate a new code.');
       }
       
@@ -103,6 +105,7 @@ const ScanQR = () => {
       
       console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user?.id);
       
+      // Check if the student has already marked attendance for this session
       const { data: existingRecord, error: existingError } = await supabase
         .from('attendance_records')
         .select('id')
@@ -115,6 +118,7 @@ const ScanQR = () => {
         throw new Error('Error checking attendance record. Please try again.');
       }
       
+      // Extract class name from the session data
       let className = 'Unknown Class';
       if (sessionData.classes) {
         if (Array.isArray(sessionData.classes)) {
@@ -126,9 +130,11 @@ const ScanQR = () => {
         }
       }
       
+      // Format the session date
       const sessionDate = new Date(sessionData.start_time).toLocaleDateString();
       setSessionInfo({ className, date: sessionDate });
       
+      // If the student has already marked attendance, show a success message
       if (existingRecord) {
         setSuccess(true);
         toast.info('You have already marked your attendance for this session');

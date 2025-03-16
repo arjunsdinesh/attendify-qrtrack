@@ -100,11 +100,11 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       // Add 5 extra seconds to account for network delays and clock differences
       const expiresAt = timestamp + ((timeLeft + 5) * 1000); 
       
+      // Simplified QR data format with all required fields
       const qrData = {
         sessionId,
         timestamp,
-        expiresAt,
-        signature: '' // Will be filled in below
+        expiresAt
       };
       
       // Generate a signature to verify the QR code hasn't been tampered with
