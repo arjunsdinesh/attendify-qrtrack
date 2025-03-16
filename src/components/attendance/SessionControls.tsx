@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -143,30 +144,23 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
-      // Check if the teacher already has an active session
-      const { data: existingSessions, error: checkError } = await supabase
+      // First, deactivate any existing active sessions for this teacher
+      // to ensure we don't have multiple active sessions
+      const { error: deactivateError } = await supabase
         .from('attendance_sessions')
-        .select('id')
+        .update({ is_active: false, end_time: new Date().toISOString() })
         .eq('created_by', userId)
         .eq('is_active', true);
-      
-      if (checkError) {
-        console.error('Error checking existing sessions:', checkError);
-        throw new Error('Failed to check existing sessions');
-      }
-      
-      // If there's an existing session, use it instead of creating a new one
-      if (existingSessions && existingSessions.length > 0) {
-        setSessionId(existingSessions[0].id);
-        setActive(true);
-        toast.info('Resumed existing attendance session');
-        return;
+        
+      if (deactivateError) {
+        console.error('Error deactivating existing sessions:', deactivateError);
+        // Continue anyway, as this is not a critical error
       }
       
       // Generate a new secret for this session
       const secret = generateSecret();
       
-      console.log('Creating session with:', {
+      console.log('Creating new session with:', {
         created_by: userId,
         class_id: selectedClassId,
         qr_secret: secret,
@@ -200,7 +194,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setSessionId(data.id);
       setActive(true);
       
-      toast.success('Attendance tracking started');
+      toast.success('New attendance tracking session started');
     } catch (error: any) {
       console.error('Error starting attendance tracking:', error);
       toast.error('Failed to start attendance tracking: ' + (error.message || 'Unknown error'));
