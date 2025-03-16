@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -10,6 +9,11 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+
+interface ClassData {
+  name: string;
+  [key: string]: any;
+}
 
 const ScanQR = () => {
   const navigate = useNavigate();
@@ -26,19 +30,15 @@ const ScanQR = () => {
     }
   }, [user, navigate]);
 
-  // Handle successful QR code scan
   const handleScan = async (result: any) => {
     try {
-      // Extract the data from the scanned QR code
       const data = result[0]?.rawValue || '';
       
       if (processing || success) return;
       
-      // Clear previous error
       setError(null);
       setProcessing(true);
       
-      // Parse the QR code data
       let qrData;
       try {
         qrData = JSON.parse(data);
@@ -46,22 +46,18 @@ const ScanQR = () => {
         throw new Error('Invalid QR code format. Please scan a valid attendance QR code.');
       }
       
-      // Check if the QR code contains all required fields
       if (!qrData.sessionId || !qrData.timestamp || !qrData.signature || !qrData.expiresAt) {
         throw new Error('Invalid QR code format. Missing required fields.');
       }
       
-      // Check if the QR code is expired using the explicit expiration time
       const now = Date.now();
       
-      // Use the explicit expiration time from the QR code
       if (now > qrData.expiresAt) {
         throw new Error('QR code has expired. Please ask your teacher to generate a new code.');
       }
       
       console.log('Checking session:', qrData.sessionId);
       
-      // Check if the session exists and get its details first
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select(`
@@ -91,7 +87,6 @@ const ScanQR = () => {
         throw new Error('User authentication required. Please log in and try again.');
       }
       
-      // Check if attendance was already marked for this session
       const { data: existingRecord, error: existingError } = await supabase
         .from('attendance_records')
         .select('id')
@@ -104,16 +99,14 @@ const ScanQR = () => {
         throw new Error('Error checking attendance record. Please try again.');
       }
       
-      // Extract class name from session data - safely handling the type
       let className = 'Unknown Class';
       if (sessionData.classes) {
-        // Handle case where it might be an array due to Supabase join
         if (Array.isArray(sessionData.classes)) {
-          className = sessionData.classes[0]?.name || 'Unknown Class';
+          const firstClass = sessionData.classes[0] as ClassData | undefined;
+          className = firstClass?.name || 'Unknown Class';
         } 
-        // Handle case where it's a single object
         else if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
-          className = sessionData.classes.name as string;
+          className = (sessionData.classes as ClassData).name;
         }
       }
       
@@ -126,9 +119,6 @@ const ScanQR = () => {
         return;
       }
       
-      console.log('Creating attendance record for session:', qrData.sessionId, 'and student:', user.id);
-      
-      // Create attendance record
       const { error: insertError } = await supabase
         .from('attendance_records')
         .insert([
@@ -147,9 +137,7 @@ const ScanQR = () => {
       toast.success('Attendance marked successfully!');
       setSuccess(true);
       
-      // Automatically stop scanning after successful scan
       setScanning(false);
-      
     } catch (error: any) {
       console.error('Error processing QR code:', error);
       setError(error.message || 'Failed to process QR code');
@@ -159,7 +147,6 @@ const ScanQR = () => {
     }
   };
 
-  // Handle QR scanner errors
   const handleError = (error: any) => {
     console.error('QR scanner error:', error);
     setError('Failed to access camera. Please check permissions.');
@@ -167,7 +154,6 @@ const ScanQR = () => {
     setScanning(false);
   };
 
-  // Toggle scanning state
   const toggleScanner = () => {
     setScanning(prev => !prev);
     if (success) setSuccess(false);

@@ -12,6 +12,12 @@ interface SessionControlsProps {
   userId: string;
 }
 
+// Define the expected shape of classes data from Supabase
+interface ClassData {
+  name: string;
+  [key: string]: any;
+}
+
 export const SessionControls = ({ userId }: SessionControlsProps) => {
   const [searchParams] = useSearchParams();
   const preselectedClassId = searchParams.get('class');
@@ -50,18 +56,19 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           
           // Extract class name - safely handling the type
           if (data.classes) {
-            let className = 'Unknown Class';
+            let classNameValue = 'Unknown Class';
             
             // Handle case where it might be an array due to Supabase join
             if (Array.isArray(data.classes)) {
-              className = data.classes[0]?.name || 'Unknown Class';
+              const firstClass = data.classes[0] as ClassData | undefined;
+              classNameValue = firstClass?.name || 'Unknown Class';
             } 
             // Handle case where it's a single object
             else if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
-              className = data.classes.name as string;
+              classNameValue = (data.classes as ClassData).name;
             }
             
-            setClassName(className);
+            setClassName(classNameValue);
           } else {
             setClassName('Unknown Class');
           }
