@@ -19,6 +19,10 @@ const QRCodeScanner = () => {
   // Handle successful QR code scan
   const handleScan = async (result: any) => {
     try {
+      if (!result || !result.length || !result[0]?.rawValue) {
+        return; // No valid scan result
+      }
+      
       // Extract the data from the scanned QR code
       const data = result[0]?.rawValue || '';
       
