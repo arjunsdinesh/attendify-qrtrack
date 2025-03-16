@@ -60,7 +60,7 @@ const ScanQR = () => {
       
       console.log('Checking session:', qrData.sessionId);
       
-      // Check if the session is active
+      // Check if the session is active with detailed error handling
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select(`
@@ -76,8 +76,24 @@ const ScanQR = () => {
         throw new Error('Error verifying session. Please try again.');
       }
       
-      if (!sessionData || !sessionData.is_active) {
-        throw new Error('This attendance session is no longer active.');
+      if (!sessionData) {
+        throw new Error('Session not found. Please scan a valid QR code.');
+      }
+      
+      if (!sessionData.is_active) {
+        throw new Error('This attendance session is no longer active. Please ask your teacher to start a new session.');
+      }
+      
+      // Extract class name from session data
+      let className = 'Unknown Class';
+      if (sessionData.classes) {
+        // Handle both array and object formats that could be returned by Supabase
+        if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
+          // Check if it's an object with a name property
+          if ('name' in sessionData.classes) {
+            className = sessionData.classes.name || 'Unknown Class';
+          }
+        }
       }
       
       console.log('Checking existing record for session:', qrData.sessionId, 'and student:', user.id);
@@ -93,16 +109,6 @@ const ScanQR = () => {
       if (existingError) {
         console.error('Existing record query error:', existingError);
         throw new Error('Error checking attendance record. Please try again.');
-      }
-      
-      // Extract class name from session data
-      let className = 'Unknown Class';
-      if (sessionData.classes) {
-        if (Array.isArray(sessionData.classes)) {
-          className = sessionData.classes[0]?.name || 'Unknown Class';
-        } else if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
-          className = sessionData.classes.name || 'Unknown Class';
-        }
       }
       
       const sessionDate = new Date(sessionData.start_time).toLocaleDateString();

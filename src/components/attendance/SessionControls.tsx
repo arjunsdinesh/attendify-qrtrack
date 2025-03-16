@@ -82,6 +82,27 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
+      // First check if there's an existing active session for this class
+      const { data: existingSession, error: existingSessionError } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('class_id', selectedClassId)
+        .eq('is_active', true)
+        .maybeSingle();
+        
+      if (existingSessionError) {
+        console.error('Error checking existing sessions:', existingSessionError);
+        throw existingSessionError;
+      }
+      
+      // If there's an existing active session, reuse it
+      if (existingSession) {
+        setSessionId(existingSession.id);
+        setActive(true);
+        toast.success('Continuing existing attendance session');
+        return;
+      }
+      
       // Generate a new secret for this session
       const secret = generateSecret();
       
@@ -144,6 +165,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       if (error) throw error;
       
       setActive(false);
+      setSessionId(null);
       toast.success('Attendance tracking stopped');
     } catch (error: any) {
       console.error('Error stopping attendance tracking:', error);

@@ -14,7 +14,7 @@ interface QRGeneratorProps {
 
 export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorProps) => {
   const [qrValue, setQrValue] = useState<string>('');
-  const [timeLeft, setTimeLeft] = useState<number>(30); // Increased from 15 to 30 seconds
+  const [timeLeft, setTimeLeft] = useState<number>(30); // 30 seconds per QR code
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +40,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       setGenerating(true);
       setError(null);
       
-      // Get the current session's secret from the database
+      // Check if the session is still active in the database
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select('qr_secret, is_active')
@@ -48,19 +48,19 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         .maybeSingle();
       
       if (sessionError) {
-        console.error('Error fetching session secret:', sessionError);
+        console.error('Error fetching session data:', sessionError);
         setError('Error fetching session data');
         throw sessionError;
       }
       
-      // Ensure the session is still active
-      if (!sessionData?.is_active) {
+      // If session is no longer active, inform the teacher and end the session
+      if (!sessionData || !sessionData.is_active) {
         setError('This session is no longer active');
-        onEndSession(); // End the session if it's not active
+        onEndSession(); // End the session UI if it's not active in DB
         return;
       }
       
-      const secret = sessionData?.qr_secret || '';
+      const secret = sessionData.qr_secret || '';
       
       if (!secret) {
         console.error('QR secret not found for session');
@@ -68,16 +68,26 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         return;
       }
       
-      // Create the QR code data with a longer expiration buffer
+      // Make sure the session stays active in the database
+      const { error: updateError } = await supabase
+        .from('attendance_sessions')
+        .update({ is_active: true })
+        .eq('id', sessionId);
+        
+      if (updateError) {
+        console.error('Error keeping session active:', updateError);
+      }
+      
+      // Create the QR code data with a longer expiration time
       const timestamp = Date.now();
-      // Add 5 extra seconds to account for network delays and clock differences
-      const expiresAt = timestamp + ((timeLeft + 5) * 1000); 
+      // Add 10 extra seconds to account for network delays and clock differences
+      const expiresAt = timestamp + ((timeLeft + 10) * 1000); 
       
       const qrData = {
         sessionId,
         timestamp,
         expiresAt,
-        classId: className // Using className as classId for simplicity
+        classId: className // Using className for display purposes
       };
       
       // Generate a signature to verify the QR code hasn't been tampered with
