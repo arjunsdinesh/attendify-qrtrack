@@ -54,7 +54,7 @@ const ScanQR = () => {
       }
       
       // Check required fields
-      if (!qrData.sessionId || !qrData.timestamp) {
+      if (!qrData.sessionId || !qrData.timestamp || !qrData.expiresAt) {
         console.error('QR missing fields:', qrData);
         throw new Error('Invalid QR code format. Missing required fields.');
       }

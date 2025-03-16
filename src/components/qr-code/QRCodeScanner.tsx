@@ -42,7 +42,7 @@ const QRCodeScanner = () => {
       }
       
       // Check if the QR code contains the required fields
-      if (!qrData.sessionId || !qrData.timestamp) {
+      if (!qrData.sessionId || !qrData.timestamp || !qrData.expiresAt) {
         console.error('QR missing fields:', qrData);
         throw new Error('Invalid QR code format');
       }
