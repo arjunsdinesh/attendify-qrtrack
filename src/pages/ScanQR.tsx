@@ -29,7 +29,14 @@ const ScanQR = () => {
   const handleScan = async (result: any) => {
     try {
       // Extract the data from the scanned QR code
-      const data = result[0]?.rawValue || '';
+      const rawValue = result[0]?.rawValue;
+      
+      // Make sure we have a valid string from the QR scan
+      if (!rawValue || typeof rawValue !== 'string') {
+        throw new Error('Invalid QR code. Please try scanning again.');
+      }
+      
+      const data = rawValue;
       
       if (processing || success) return;
       
@@ -91,7 +98,7 @@ const ScanQR = () => {
         if (typeof sessionData.classes === 'object' && sessionData.classes !== null) {
           // Check if it's an object with a name property
           if ('name' in sessionData.classes) {
-            className = sessionData.classes.name || 'Unknown Class';
+            className = sessionData.classes.name as string || 'Unknown Class';
           }
         }
       }
