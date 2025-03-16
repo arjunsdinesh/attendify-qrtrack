@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -145,12 +144,11 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassName(selectedClassName);
       
       // Check if the teacher already has an active session
-      const { data: existingSession, error: checkError } = await supabase
+      const { data: existingSessions, error: checkError } = await supabase
         .from('attendance_sessions')
         .select('id')
         .eq('created_by', userId)
-        .eq('is_active', true)
-        .maybeSingle();
+        .eq('is_active', true);
       
       if (checkError) {
         console.error('Error checking existing sessions:', checkError);
@@ -158,8 +156,8 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       }
       
       // If there's an existing session, use it instead of creating a new one
-      if (existingSession) {
-        setSessionId(existingSession.id);
+      if (existingSessions && existingSessions.length > 0) {
+        setSessionId(existingSessions[0].id);
         setActive(true);
         toast.info('Resumed existing attendance session');
         return;
