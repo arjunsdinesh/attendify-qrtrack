@@ -88,7 +88,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         .select('id')
         .eq('class_id', selectedClassId)
         .eq('is_active', true)
-        .maybeSingle();
+        .maybeSingle();  // Changed from single() to maybeSingle()
         
       if (existingSessionError) {
         console.error('Error checking existing sessions:', existingSessionError);

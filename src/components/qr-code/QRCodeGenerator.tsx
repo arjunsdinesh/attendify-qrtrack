@@ -48,9 +48,13 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
         .from('attendance_sessions')
         .select('qr_secret')
         .eq('id', sessionId)
-        .single();
+        .maybeSingle();  // Changed from single() to maybeSingle()
       
       if (sessionError) throw sessionError;
+      
+      if (!sessionData) {
+        throw new Error('Session not found');
+      }
       
       const secret = sessionData.qr_secret;
       
@@ -132,11 +136,11 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
           .from('attendance_sessions')
           .select('is_active, qr_secret')
           .eq('id', sessionId)
-          .single();
+          .maybeSingle();  // Changed from single() to maybeSingle()
         
         if (error) throw error;
         
-        if (data.is_active) {
+        if (data && data.is_active) {
           setActive(true);
           await generateQRData();
         }
