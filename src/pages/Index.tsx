@@ -1,3 +1,4 @@
+
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -7,6 +8,7 @@ import { checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Mail } from 'lucide-react';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
 

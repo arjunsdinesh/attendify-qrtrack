@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -18,7 +19,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
   global: {
-    fetch: (...args) => fetch(...args),
+    fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
   },
   realtime: {
     timeout: 20000,
