@@ -23,9 +23,10 @@ const Profile = () => {
     try {
       setSaving(true);
       
-      // Base profile data
+      // Base profile data - now including email which is required
       const profileData = {
         id: user.id,
+        email: user.email, // Add the required email field
         full_name: formData.fullName,
         role: user.role,
         updated_at: new Date().toISOString()
