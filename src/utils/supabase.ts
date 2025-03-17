@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+
+import { supabase, checkConnection } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 // Cache environment variables to avoid repeated lookups
@@ -9,21 +10,6 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIU
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.');
 }
-
-// Configure client with optimized options
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-  },
-  global: {
-    fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
-  },
-  realtime: {
-    timeout: 20000,
-  },
-});
 
 export interface Profile {
   id: string;
@@ -121,7 +107,7 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   }
 };
 
-// Optimize database connection check with retries and timeout
+// Re-export the connection check from the client for convenience
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     // Implement a more robust connection check with retry logic
@@ -130,34 +116,32 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     
     while (retries <= maxRetries) {
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // Increase timeout to 5s
+        console.log(`Connection attempt ${retries + 1} of ${maxRetries + 1}`);
+        const isConnected = await checkConnection();
         
-        const { data, error } = await supabase.from('profiles')
-          .select('count', { count: 'exact', head: true })
-          .abortSignal(controller.signal);
-        
-        clearTimeout(timeoutId);
-        
-        if (!error) {
+        if (isConnected) {
           console.log('Supabase connection successful');
           return true;
         }
         
         // If error is related to connection, try again
-        console.warn(`Connection attempt ${retries + 1} failed:`, error);
+        console.warn(`Connection attempt ${retries + 1} failed`);
         retries++;
         
         if (retries <= maxRetries) {
           // Wait before retrying with exponential backoff
-          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+          const delay = 1000 * Math.pow(2, retries - 1); // Exponential backoff
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       } catch (innerError) {
         console.error(`Connection attempt ${retries + 1} error:`, innerError);
         retries++;
         
         if (retries <= maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+          const delay = 1000 * Math.pow(2, retries - 1);
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }

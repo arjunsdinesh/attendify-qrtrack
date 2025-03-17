@@ -12,6 +12,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true, // Enable session detection in URL
+    storageKey: 'supabase.auth.token', // Ensure consistent storage key
   },
   realtime: {
     timeout: 20000,
@@ -21,7 +22,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
 });
 
-// Export connection checking utility directly from the client
+// Optimized connection checking utility
 export const checkConnection = async (): Promise<boolean> => {
   try {
     const controller = new AbortController();
@@ -33,9 +34,15 @@ export const checkConnection = async (): Promise<boolean> => {
     
     clearTimeout(timeoutId);
     
-    return !error;
+    if (error) {
+      console.error('Connection check failed with error:', error);
+      return false;
+    }
+    
+    console.log('Connection check successful');
+    return true;
   } catch (error) {
-    console.error('Connection check failed:', error);
+    console.error('Connection check exception:', error);
     return false;
   }
 };
