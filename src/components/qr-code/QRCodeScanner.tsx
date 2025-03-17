@@ -88,98 +88,106 @@ const QRCodeScanner = () => {
         return;
       }
       
-      // Check if the session is active
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('attendance_sessions')
-        .select('is_active, id, class_id')
-        .eq('id', qrData.sessionId)
-        .maybeSingle();
-      
-      if (sessionError) {
-        console.error('Session query error:', sessionError);
-        setError('Error verifying attendance session. Please try again.');
-        setProcessing(false);
-        return;
-      }
-      
-      if (!sessionData) {
-        console.error('Session not found:', qrData.sessionId);
-        setError('Attendance session not found. Please scan a valid QR code.');
-        setProcessing(false);
-        return;
-      }
-      
-      console.log('Session data found:', {
-        id: sessionData.id,
-        classId: sessionData.class_id,
-        isActive: sessionData.is_active
-      });
-      
-      if (!sessionData.is_active) {
-        setError('This attendance session is no longer active');
-        setProcessing(false);
-        return;
-      }
-      
-      // Check if attendance was already marked for this session
-      const { data: existingRecord, error: existingError } = await supabase
-        .from('attendance_records')
-        .select('id')
-        .eq('session_id', qrData.sessionId)
-        .eq('student_id', user.id)
-        .maybeSingle();
-      
-      if (existingError) {
-        console.error('Error checking existing record:', existingError);
-        setError('Error verifying attendance record. Please try again.');
-        setProcessing(false);
-        return;
-      }
-      
-      if (existingRecord) {
+      try {
+        // Check if the session is active - improved error handling
+        const { data: sessionData, error: sessionError } = await supabase
+          .from('attendance_sessions')
+          .select('is_active, id, class_id')
+          .eq('id', qrData.sessionId)
+          .maybeSingle();
+        
+        if (sessionError) {
+          console.error('Session query error:', sessionError);
+          setError('Error verifying attendance session. Please try again.');
+          setProcessing(false);
+          return;
+        }
+        
+        if (!sessionData) {
+          console.error('Session not found:', qrData.sessionId);
+          // More informative error message with troubleshooting help
+          setError('Attendance session not found. Please make sure you are scanning a QR code from an active session. If the problem persists, ask your teacher to create a new session.');
+          setProcessing(false);
+          return;
+        }
+        
+        console.log('Session data found:', {
+          id: sessionData.id,
+          classId: sessionData.class_id,
+          isActive: sessionData.is_active
+        });
+        
+        if (!sessionData.is_active) {
+          setError('This attendance session is no longer active. Please ask your teacher to start a new session.');
+          setProcessing(false);
+          return;
+        }
+        
+        // Check if attendance was already marked for this session
+        const { data: existingRecord, error: existingError } = await supabase
+          .from('attendance_records')
+          .select('id')
+          .eq('session_id', qrData.sessionId)
+          .eq('student_id', user.id)
+          .maybeSingle();
+        
+        if (existingError) {
+          console.error('Error checking existing record:', existingError);
+          setError('Error verifying attendance record. Please try again.');
+          setProcessing(false);
+          return;
+        }
+        
+        if (existingRecord) {
+          setRecentlyMarked(true);
+          setSuccessMessage('You have already marked your attendance for this session');
+          setTimeout(() => setRecentlyMarked(false), 5000);
+          toast.info('You have already marked your attendance for this session');
+          setProcessing(false);
+          return;
+        }
+        
+        console.log('Recording attendance for session:', qrData.sessionId);
+        
+        // Create attendance record
+        const { error: insertError } = await supabase
+          .from('attendance_records')
+          .insert([
+            {
+              session_id: qrData.sessionId,
+              student_id: user.id,
+              timestamp: new Date().toISOString(),
+            }
+          ]);
+        
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          setError('Failed to record attendance. Please try again.');
+          setProcessing(false);
+          return;
+        }
+        
+        console.log('Attendance recorded successfully');
+        
+        // Mark as recently marked to prevent multiple submissions
         setRecentlyMarked(true);
-        setSuccessMessage('You have already marked your attendance for this session');
+        setSuccessMessage('Attendance marked successfully!');
         setTimeout(() => setRecentlyMarked(false), 5000);
-        toast.info('You have already marked your attendance for this session');
+        
+        toast.success('Attendance marked successfully!');
+        
+        // Automatically stop scanning after successful scan
+        setScanning(false);
+      } catch (innerError: any) {
+        console.error('Error processing session:', innerError);
+        setError(`Error processing QR code: ${innerError.message || 'Unknown error'}`);
         setProcessing(false);
-        return;
       }
-      
-      console.log('Recording attendance for session:', qrData.sessionId);
-      
-      // Create attendance record
-      const { error: insertError } = await supabase
-        .from('attendance_records')
-        .insert([
-          {
-            session_id: qrData.sessionId,
-            student_id: user.id,
-            timestamp: new Date().toISOString(),
-          }
-        ]);
-      
-      if (insertError) {
-        console.error('Insert error:', insertError);
-        setError('Failed to record attendance. Please try again.');
-        setProcessing(false);
-        return;
-      }
-      
-      console.log('Attendance recorded successfully');
-      
-      // Mark as recently marked to prevent multiple submissions
-      setRecentlyMarked(true);
-      setSuccessMessage('Attendance marked successfully!');
-      setTimeout(() => setRecentlyMarked(false), 5000);
-      
-      toast.success('Attendance marked successfully!');
-      
-      // Automatically stop scanning after successful scan
-      setScanning(false);
       
     } catch (error: any) {
       console.error('Error processing QR code:', error);
       setError(error.message || 'Failed to process QR code');
+      setProcessing(false);
     } finally {
       setProcessing(false);
     }
