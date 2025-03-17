@@ -18,6 +18,7 @@ const QRCodeScanner = () => {
   const [recentlyMarked, setRecentlyMarked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState<number>(0);
 
   // Reset error when starting or stopping scanning
   useEffect(() => {
@@ -87,6 +88,18 @@ const QRCodeScanner = () => {
         setProcessing(false);
         return;
       }
+
+      // Attempt to activate the session if it exists (regardless of current state)
+      try {
+        console.log('Preemptively activating session:', qrData.sessionId);
+        await supabase
+          .from('attendance_sessions')
+          .update({ is_active: true, end_time: null })
+          .eq('id', qrData.sessionId);
+      } catch (activateError) {
+        console.error('Error in preemptive activation:', activateError);
+        // Continue anyway as this is just a precaution
+      }
       
       try {
         // Check if the session exists - improved error handling
@@ -105,6 +118,20 @@ const QRCodeScanner = () => {
         
         if (!sessionData) {
           console.error('Session not found:', qrData.sessionId);
+          
+          // Check if we should retry
+          if (retryCount < 2) {
+            setRetryCount(count => count + 1);
+            setError('Attendance session not found. Retrying...');
+            
+            // Wait briefly and try again
+            setTimeout(() => {
+              setProcessing(false);
+              handleScan(result);
+            }, 1500);
+            return;
+          }
+          
           // More informative error message with troubleshooting help
           setError('Attendance session not found. Please make sure you are scanning a QR code from an active session. If the problem persists, ask your teacher to create a new session.');
           setProcessing(false);
@@ -123,7 +150,7 @@ const QRCodeScanner = () => {
           
           const { error: activateError } = await supabase
             .from('attendance_sessions')
-            .update({ is_active: true })
+            .update({ is_active: true, end_time: null })
             .eq('id', qrData.sessionId);
             
           if (activateError) {
@@ -189,6 +216,9 @@ const QRCodeScanner = () => {
         
         toast.success('Attendance marked successfully!');
         
+        // Reset retry count on success
+        setRetryCount(0);
+        
         // Automatically stop scanning after successful scan
         setScanning(false);
       } catch (innerError: any) {
@@ -218,6 +248,10 @@ const QRCodeScanner = () => {
     setScanning(prev => !prev);
     setError(null);
     setSuccessMessage(null);
+    // Reset retry count when starting a new scan
+    if (!scanning) {
+      setRetryCount(0);
+    }
   };
 
   return (

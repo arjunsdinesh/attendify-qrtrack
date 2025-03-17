@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
@@ -35,6 +34,19 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       setConnectionError(false);
       
       console.log('Generating QR code for session:', sessionId);
+      
+      // Force activate session every time we generate a new QR code
+      const { error: activateError } = await supabase
+        .from('attendance_sessions')
+        .update({ is_active: true, end_time: null })
+        .eq('id', sessionId);
+        
+      if (activateError) {
+        console.error('Error activating session on QR generate:', activateError);
+        // Continue anyway and check the session status
+      } else {
+        console.log('Session activated successfully during QR generation');
+      }
       
       // Check if the session exists and ensure it's active
       const { data: sessionData, error: sessionError } = await supabase
@@ -81,7 +93,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         // Activate the session
         const { error: updateError } = await supabase
           .from('attendance_sessions')
-          .update({ is_active: true })
+          .update({ is_active: true, end_time: null })
           .eq('id', sessionId);
           
         if (updateError) {
@@ -129,6 +141,17 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       });
       
       setQrValue(JSON.stringify(qrData));
+      
+      // Ping the session to keep it active
+      const { error: pingError } = await supabase
+        .from('attendance_sessions')
+        .update({ is_active: true })
+        .eq('id', sessionId);
+        
+      if (pingError) {
+        console.error('Error pinging session:', pingError);
+        // Continue anyway
+      }
       
     } catch (error: any) {
       console.error('Error generating QR code:', error);
@@ -213,6 +236,30 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       return () => clearTimeout(recoveryTimer);
     }
   }, [connectionError]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Set up an interval to ping the session to keep it alive
+  useEffect(() => {
+    const keepAliveInterval = setInterval(async () => {
+      if (!sessionId) return;
+      
+      try {
+        console.log('Sending keep-alive ping for session:', sessionId);
+        
+        const { error } = await supabase
+          .from('attendance_sessions')
+          .update({ is_active: true, end_time: null })
+          .eq('id', sessionId);
+          
+        if (error) {
+          console.error('Error in keep-alive ping:', error);
+        }
+      } catch (error) {
+        console.error('Exception in keep-alive ping:', error);
+      }
+    }, 10000); // Every 10 seconds
+    
+    return () => clearInterval(keepAliveInterval);
+  }, [sessionId]);
 
   return (
     <div className="flex flex-col items-center space-y-4">

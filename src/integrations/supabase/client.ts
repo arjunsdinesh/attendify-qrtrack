@@ -20,6 +20,13 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
   },
+  db: {
+    schema: 'public'
+  },
+  // Add improved error handling and retry logic
+  headers: {
+    'X-Client-Info': 'attendance-app-web'
+  }
 });
 
 // Optimized connection checking utility
