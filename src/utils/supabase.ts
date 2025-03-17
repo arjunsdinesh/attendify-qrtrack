@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -122,19 +121,19 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   }
 };
 
-// Optimize database connection check with retries
+// Optimize database connection check with retries and timeout
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     // Implement a more robust connection check with retry logic
-    const maxRetries = 2;
+    const maxRetries = 3;
     let retries = 0;
     
     while (retries <= maxRetries) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Increase timeout to 5s
         
-        const { error } = await supabase.from('profiles')
+        const { data, error } = await supabase.from('profiles')
           .select('count', { count: 'exact', head: true })
           .abortSignal(controller.signal);
         
@@ -150,15 +149,15 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
         retries++;
         
         if (retries <= maxRetries) {
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait before retrying with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
         }
       } catch (innerError) {
         console.error(`Connection attempt ${retries + 1} error:`, innerError);
         retries++;
         
         if (retries <= maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
         }
       }
     }

@@ -11,9 +11,31 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true, // Enable session detection in URL
   },
   realtime: {
     timeout: 20000,
   },
+  global: {
+    fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+  },
 });
+
+// Export connection checking utility directly from the client
+export const checkConnection = async (): Promise<boolean> => {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const { data, error } = await supabase.from('profiles')
+      .select('count', { count: 'exact', head: true })
+      .abortSignal(controller.signal);
+    
+    clearTimeout(timeoutId);
+    
+    return !error;
+  } catch (error) {
+    console.error('Connection check failed:', error);
+    return false;
+  }
+};
