@@ -9,13 +9,14 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Mail } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ConnectionStatus from '@/components/auth/ConnectionStatus';
 
 const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [dbConnected, setDbConnected] = useState(true);
+  const [dbConnected, setDbConnected] = useState<boolean | null>(null); // null means checking
   const [localLoading, setLocalLoading] = useState(true);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
 
@@ -23,18 +24,19 @@ const Index = () => {
     let isMounted = true;
     const checkConnection = async () => {
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        if (isMounted) setDbConnected(null); // Set to checking
         
         const connected = await checkSupabaseConnection();
-        clearTimeout(timeoutId);
         
         if (!isMounted) return;
         
         setDbConnected(connected);
         if (!connected) {
-          toast.error('Database connection failed. Please check your configuration.');
-        } 
+          console.error('Database connection failed');
+          toast.error('Database connection failed. Please check your configuration or try again later.');
+        } else {
+          console.log('Database connection successful');
+        }
       } catch (error) {
         if (!isMounted) return;
         console.error('Error checking DB connection:', error);
@@ -75,7 +77,8 @@ const Index = () => {
   useEffect(() => {
     console.log('Auth loading state:', loading);
     console.log('Local loading state:', localLoading);
-  }, [loading, localLoading]);
+    console.log('Database connection state:', dbConnected);
+  }, [loading, localLoading, dbConnected]);
 
   if (loading && !user) {
     return (
@@ -86,6 +89,8 @@ const Index = () => {
   }
 
   if (!user) {
+    const connectionStatus = dbConnected === null ? 'checking' : dbConnected ? 'connected' : 'disconnected';
+    
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
@@ -100,13 +105,14 @@ const Index = () => {
           )}
           
           <Card className="border-2 shadow-lg">
+            <ConnectionStatus status={connectionStatus} />
             <CardContent className="pt-6">
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold mb-2">QR Attendance</h1>
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
-                {!dbConnected && (
+                {!dbConnected && dbConnected !== null && (
                   <p className="text-destructive mt-2">
-                    Database connection error. Please check your configuration.
+                    Database connection error. Please check your configuration or try again later.
                   </p>
                 )}
               </div>

@@ -122,18 +122,49 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   }
 };
 
-// Optimize database connection check
+// Optimize database connection check with retries
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    // Implement a more robust connection check with retry logic
+    const maxRetries = 2;
+    let retries = 0;
     
-    const { error } = await supabase.from('profiles')
-      .select('count', { count: 'exact', head: true })
-      .abortSignal(controller.signal);
+    while (retries <= maxRetries) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const { error } = await supabase.from('profiles')
+          .select('count', { count: 'exact', head: true })
+          .abortSignal(controller.signal);
+        
+        clearTimeout(timeoutId);
+        
+        if (!error) {
+          console.log('Supabase connection successful');
+          return true;
+        }
+        
+        // If error is related to connection, try again
+        console.warn(`Connection attempt ${retries + 1} failed:`, error);
+        retries++;
+        
+        if (retries <= maxRetries) {
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (innerError) {
+        console.error(`Connection attempt ${retries + 1} error:`, innerError);
+        retries++;
+        
+        if (retries <= maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
     
-    clearTimeout(timeoutId);
-    return !error;
+    console.error('All connection attempts failed');
+    return false;
   } catch (error) {
     console.error('Supabase connection check failed:', error);
     return false;

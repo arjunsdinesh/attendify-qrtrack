@@ -18,6 +18,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [timeLeft, setTimeLeft] = useState<number>(30); // 30 seconds
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<boolean>(false);
 
   // Generate new QR code data
   const generateQRData = async () => {
@@ -30,6 +31,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       setGenerating(true);
       setError(null);
+      setConnectionError(false);
       
       console.log('Generating QR code for session:', sessionId);
       
@@ -46,7 +48,16 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       if (sessionError) {
         console.error('Error fetching session secret:', sessionError);
-        setError('Error fetching session data');
+        
+        // Check if it's a connection error
+        if (sessionError.message?.includes('network') || 
+            sessionError.message?.includes('Failed to fetch') ||
+            sessionError.message?.includes('timeout')) {
+          setConnectionError(true);
+          setError('Database connection error. Please check your internet connection.');
+        } else {
+          setError('Error fetching session data');
+        }
         throw sessionError;
       }
       
@@ -91,8 +102,11 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
     } catch (error: any) {
       console.error('Error generating QR code:', error);
-      setError('Failed to generate QR code');
-      toast.error('Error generating QR code');
+      
+      if (!connectionError) {
+        setError('Failed to generate QR code');
+        toast.error('Error generating QR code');
+      }
     } finally {
       setGenerating(false);
     }
@@ -119,6 +133,18 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       if (interval) clearInterval(interval);
     };
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recovery mechanism for connection errors
+  useEffect(() => {
+    if (connectionError) {
+      const recoveryTimer = setTimeout(() => {
+        console.log('Attempting to recover from connection error...');
+        generateQRData();
+      }, 5000); // Try to recover after 5 seconds
+      
+      return () => clearTimeout(recoveryTimer);
+    }
+  }, [connectionError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col items-center space-y-4">
