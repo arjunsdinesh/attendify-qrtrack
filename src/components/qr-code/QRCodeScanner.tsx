@@ -89,7 +89,7 @@ const QRCodeScanner = () => {
       }
       
       try {
-        // Check if the session is active - improved error handling
+        // Check if the session exists - improved error handling
         const { data: sessionData, error: sessionError } = await supabase
           .from('attendance_sessions')
           .select('is_active, id, class_id')
@@ -117,10 +117,23 @@ const QRCodeScanner = () => {
           isActive: sessionData.is_active
         });
         
+        // If session exists but is not active, try to activate it
         if (!sessionData.is_active) {
-          setError('This attendance session is no longer active. Please ask your teacher to start a new session.');
-          setProcessing(false);
-          return;
+          console.log('Found inactive session, attempting to reactivate...');
+          
+          const { error: activateError } = await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true })
+            .eq('id', qrData.sessionId);
+            
+          if (activateError) {
+            console.error('Error activating session:', activateError);
+            setError('This attendance session is no longer active. Please ask your teacher to start a new session.');
+            setProcessing(false);
+            return;
+          }
+          
+          console.log('Successfully reactivated session');
         }
         
         // Check if attendance was already marked for this session

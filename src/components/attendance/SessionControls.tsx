@@ -51,6 +51,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         // If an active session exists, restore it
         if (data) {
+          console.log('Found active session:', data);
           setSessionId(data.id);
           setClassId(data.class_id);
           
@@ -74,6 +75,8 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           }
           
           setActive(true);
+        } else {
+          console.log('No active sessions found');
         }
       } catch (error: any) {
         console.error('Error checking active sessions:', error);
@@ -164,10 +167,11 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         created_by: userId,
         class_id: selectedClassId,
         qr_secret: secret,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        is_active: true // Explicitly set is_active to true
       });
       
-      // Create a new session
+      // Create a new session with is_active explicitly set to true
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
@@ -191,6 +195,31 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       }
       
       console.log('Session created successfully:', data);
+      
+      // Double-check that the session is active
+      const { data: checkData, error: checkError } = await supabase
+        .from('attendance_sessions')
+        .select('is_active')
+        .eq('id', data.id)
+        .single();
+        
+      if (checkError) {
+        console.error('Error checking session status:', checkError);
+      } else {
+        console.log('Session active status:', checkData?.is_active);
+        if (!checkData?.is_active) {
+          // If for some reason it's not active, try to update it
+          const { error: updateError } = await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true })
+            .eq('id', data.id);
+            
+          if (updateError) {
+            console.error('Error updating session status:', updateError);
+          }
+        }
+      }
+      
       setSessionId(data.id);
       setActive(true);
       

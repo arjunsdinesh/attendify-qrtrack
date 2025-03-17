@@ -75,9 +75,22 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       // Ensure the session is still active
       if (!sessionData.is_active) {
-        setError('This session is no longer active');
-        onEndSession(); // End the session if it's not active
-        return;
+        console.log('Session is not active, attempting to reactivate...');
+        
+        // Try to reactivate the session
+        const { error: updateError } = await supabase
+          .from('attendance_sessions')
+          .update({ is_active: true })
+          .eq('id', sessionId);
+          
+        if (updateError) {
+          console.error('Error reactivating session:', updateError);
+          setError('Unable to reactivate this session');
+          onEndSession();
+          return;
+        }
+        
+        console.log('Session reactivated successfully');
       }
       
       // Create the QR code data with expiration time
