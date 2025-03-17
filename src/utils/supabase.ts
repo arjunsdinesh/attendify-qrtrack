@@ -1,6 +1,9 @@
 
-import { supabase, checkConnection } from '@/integrations/supabase/client';
+import { supabase as supabaseClient, checkConnection } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+// Re-export the Supabase client
+export const supabase = supabaseClient;
 
 // Cache environment variables to avoid repeated lookups
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ushmvfuczmqjjtwnqebp.supabase.co';
