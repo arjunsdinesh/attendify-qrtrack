@@ -1,22 +1,44 @@
 
+import { Suspense, lazy } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
+import { LoadingSpinner } from "@/components/ui-components";
+
+// Eagerly load critical path components
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import StudentDashboard from "./pages/StudentDashboard";
-import TeacherDashboard from "./pages/TeacherDashboard";
-import ScanQR from "./pages/ScanQR";
-import CreateSession from "./pages/CreateSession";
-import Profile from "./pages/Profile";
-import AttendanceHistory from "./pages/AttendanceHistory";
-import AttendanceRecords from "./pages/AttendanceRecords";
-import ManageClasses from "./pages/ManageClasses";
 
-const queryClient = new QueryClient();
+// Lazily load non-critical components
+const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
+const ScanQR = lazy(() => import("./pages/ScanQR"));
+const CreateSession = lazy(() => import("./pages/CreateSession"));
+const Profile = lazy(() => import("./pages/Profile"));
+const AttendanceHistory = lazy(() => import("./pages/AttendanceHistory"));
+const AttendanceRecords = lazy(() => import("./pages/AttendanceRecords"));
+const ManageClasses = lazy(() => import("./pages/ManageClasses"));
+
+// Configure with larger staleTime to reduce refetches
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000, // 1 minute
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <LoadingSpinner className="h-8 w-8" />
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -28,18 +50,23 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Index />} />
-            <Route path="/student-dashboard" element={<StudentDashboard />} />
-            <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
-            <Route path="/student" element={<StudentDashboard />} />
-            <Route path="/teacher" element={<TeacherDashboard />} />
-            <Route path="/scan-qr" element={<ScanQR />} />
-            <Route path="/create-session" element={<CreateSession />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/attendance-history" element={<AttendanceHistory />} />
-            <Route path="/attendance-records" element={<AttendanceRecords />} />
-            <Route path="/manage-classes" element={<ManageClasses />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <Routes>
+                  <Route path="/student-dashboard" element={<StudentDashboard />} />
+                  <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
+                  <Route path="/student" element={<StudentDashboard />} />
+                  <Route path="/teacher" element={<TeacherDashboard />} />
+                  <Route path="/scan-qr" element={<ScanQR />} />
+                  <Route path="/create-session" element={<CreateSession />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/attendance-history" element={<AttendanceHistory />} />
+                  <Route path="/attendance-records" element={<AttendanceRecords />} />
+                  <Route path="/manage-classes" element={<ManageClasses />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            } />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

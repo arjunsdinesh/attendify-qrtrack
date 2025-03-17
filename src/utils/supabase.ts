@@ -1,8 +1,7 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
-// Retrieve Supabase URL and anon key from environment variables
+// Cache environment variables to avoid repeated lookups
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ushmvfuczmqjjtwnqebp.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ';
 
@@ -11,7 +10,20 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Configure client with optimized options
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+  },
+  global: {
+    fetch: (...args) => fetch(...args),
+  },
+  realtime: {
+    timeout: 20000,
+  },
+});
 
 export interface Profile {
   id: string;
@@ -109,10 +121,17 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   }
 };
 
-// Function to check Supabase connection
+// Optimize database connection check
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    const { error } = await supabase.from('profiles').select('count').limit(1);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const { error } = await supabase.from('profiles')
+      .select('count', { count: 'exact', head: true })
+      .abortSignal(controller.signal);
+    
+    clearTimeout(timeoutId);
     return !error;
   } catch (error) {
     console.error('Supabase connection check failed:', error);

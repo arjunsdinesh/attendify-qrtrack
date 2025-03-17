@@ -26,22 +26,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
+    let isMounted = true;
+    
     const getSession = async () => {
       try {
-        console.log('Getting session...');
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session) {
-          console.log('Session found:', session.user.id);
+        if (session && isMounted) {
           await fetchUserProfile(session.user.id);
-        } else {
-          console.log('No session found');
+        } else if (isMounted) {
           setLoading(false);
         }
       } catch (error) {
         console.error('Error getting session:', error);
-        toast.error('Session error. Please try again later.');
-        setLoading(false);
+        if (isMounted) {
+          toast.error('Session error. Please try again later.');
+          setLoading(false);
+        }
       }
     };
 
@@ -49,7 +50,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
+        if (!isMounted) return;
+        
         if (event === 'SIGNED_IN' && session) {
           setLoading(true);
           await fetchUserProfile(session.user.id);
@@ -63,62 +65,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [navigate]);
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      console.log('Fetching user profile for:', userId);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        setLoading(false);
-        return;
-      }
-
-      if (!data) {
-        console.error('No profile found for user:', userId);
-        setLoading(false);
-        return;
-      }
-
-      console.log('Profile data fetched:', data);
-      setUser(data as Profile);
-
-      if (data.role === 'student') {
-        const { data: studentData, error: studentError } = await supabase
-          .from('student_profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
+      const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('student_profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('teacher_profiles').select('*').eq('id', userId).maybeSingle()
+      ]);
+      
+      if (profileResponse.status === 'fulfilled' && profileResponse.value.data) {
+        setUser(profileResponse.value.data as Profile);
         
-        if (studentError) {
-          console.error('Error fetching student profile:', studentError);
-          setLoading(false);
-          return;
+        if (profileResponse.value.data.role === 'student' && 
+            studentResponse.status === 'fulfilled' && 
+            studentResponse.value.data) {
+          setStudentProfile(studentResponse.value.data as StudentProfile);
+        } else if (profileResponse.value.data.role === 'teacher' && 
+                   teacherResponse.status === 'fulfilled' && 
+                   teacherResponse.value.data) {
+          setTeacherProfile(teacherResponse.value.data as TeacherProfile);
         }
-        console.log('Student profile data:', studentData);
-        setStudentProfile(studentData as StudentProfile);
-      } else if (data.role === 'teacher') {
-        const { data: teacherData, error: teacherError } = await supabase
-          .from('teacher_profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
-        
-        if (teacherError) {
-          console.error('Error fetching teacher profile:', teacherError);
-          setLoading(false);
-          return;
-        }
-        console.log('Teacher profile data:', teacherData);
-        setTeacherProfile(teacherData as TeacherProfile);
       }
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);

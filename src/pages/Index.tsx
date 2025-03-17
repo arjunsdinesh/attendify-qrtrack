@@ -1,15 +1,14 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui-components';
-import AuthForm from '@/components/auth/AuthForm';
-import DashboardLayout from '@/components/layout/DashboardLayout';
 import { checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Mail } from 'lucide-react';
+
+const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -18,41 +17,45 @@ const Index = () => {
   const [localLoading, setLocalLoading] = useState(true);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
 
-  // Check database connection
   useEffect(() => {
+    let isMounted = true;
     const checkConnection = async () => {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
         const connected = await checkSupabaseConnection();
+        clearTimeout(timeoutId);
+        
+        if (!isMounted) return;
+        
         setDbConnected(connected);
         if (!connected) {
           toast.error('Database connection failed. Please check your configuration.');
-          console.error('Failed to connect to Supabase database.');
-        } else {
-          console.log('Successfully connected to Supabase database.');
-        }
+        } 
       } catch (error) {
+        if (!isMounted) return;
         console.error('Error checking DB connection:', error);
         setDbConnected(false);
       } finally {
-        setLocalLoading(false);
-        setEmailConfirmationChecked(true);
+        if (isMounted) {
+          setLocalLoading(false);
+          setEmailConfirmationChecked(true);
+        }
       }
     };
     
     checkConnection();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Redirect authenticated users to their dashboard
   useEffect(() => {
-    console.log('Redirect check - user:', user, 'loading:', loading, 'localLoading:', localLoading);
-    
     if (!loading && !localLoading && user) {
-      console.log('Redirecting to dashboard for role:', user.role);
-      if (user.role === 'student') {
-        navigate('/student');
-      } else if (user.role === 'teacher') {
-        navigate('/teacher');
-      }
+      const destination = user.role === 'student' ? '/student' : '/teacher';
+      navigate(destination, { replace: true });
     }
   }, [user, loading, localLoading, navigate]);
 
@@ -61,22 +64,18 @@ const Index = () => {
     return urlParams.get('email_confirmed') === 'true';
   };
 
-  // Show a success message if email was just confirmed
   useEffect(() => {
     if (emailConfirmationChecked && getEmailConfirmationFromUrl()) {
       toast.success('Email confirmed successfully! You can now log in.');
     }
   }, [emailConfirmationChecked]);
 
-  // Debug loading states
   useEffect(() => {
     console.log('Auth loading state:', loading);
     console.log('Local loading state:', localLoading);
   }, [loading, localLoading]);
 
-  // Fixed loading check to show spinner only when necessary
-  if (loading) {
-    console.log('Showing loading spinner - auth loading:', loading);
+  if (loading && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />
@@ -110,7 +109,9 @@ const Index = () => {
                 )}
               </div>
               
-              <AuthForm />
+              <Suspense fallback={<LoadingSpinner className="h-6 w-6 mx-auto" />}>
+                <AuthForm />
+              </Suspense>
             </CardContent>
           </Card>
         </div>
@@ -118,7 +119,6 @@ const Index = () => {
     );
   }
 
-  // This should not normally be reached due to the useEffect redirect
   return (
     <DashboardLayout>
       {user.role === 'teacher' ? (
