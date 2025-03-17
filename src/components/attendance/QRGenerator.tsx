@@ -18,67 +18,33 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<boolean>(false);
-  const [retryCount, setRetryCount] = useState<number>(0);
   const [sessionActive, setSessionActive] = useState<boolean>(true);
   const [refreshingQR, setRefreshingQR] = useState<boolean>(false);
 
-  // Force activate session - Improved with retry mechanism
+  // Force activate session - simplified
   const forceActivateSession = useCallback(async () => {
     try {
       console.log('Force activating session:', sessionId);
       setGenerating(true);
       
-      // Try up to 3 times to ensure activation
-      let attempt = 0;
-      let activationSuccess = false;
-      
-      while (attempt < 3 && !activationSuccess) {
-        try {
-          const { error } = await supabase
-            .from('attendance_sessions')
-            .update({ 
-              is_active: true as any, 
-              end_time: null 
-            } as any)
-            .eq('id', sessionId as any);
-            
-          if (error) {
-            console.error(`Error activating session (attempt ${attempt + 1}):`, error);
-            attempt++;
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 500));
-          } else {
-            console.log('Session activated successfully');
-            activationSuccess = true;
-            setSessionActive(true);
-          }
-        } catch (err) {
-          console.error(`Activation error (attempt ${attempt + 1}):`, err);
-          attempt++;
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true,
+          end_time: null 
+        })
+        .eq('id', sessionId);
+        
+      if (error) {
+        console.error('Error activating session:', error);
+        setSessionActive(false);
+        setError('Failed to activate session');
+        return false;
       }
       
-      // Verify the activation status
-      if (activationSuccess) {
-        const { data, error } = await supabase
-          .from('attendance_sessions')
-          .select('is_active')
-          .eq('id', sessionId as any)
-          .maybeSingle();
-          
-        if (error) {
-          console.error('Error verifying activation:', error);
-        } else if (!data?.is_active) {
-          console.error('Session still not active after update');
-          setSessionActive(false);
-        } else {
-          console.log('Verified session is active:', data.is_active);
-          setSessionActive(true);
-        }
-      }
-      
-      return activationSuccess;
+      console.log('Session activated successfully');
+      setSessionActive(true);
+      return true;
       
     } catch (error) {
       console.error('Error in forceActivateSession:', error);
@@ -89,7 +55,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     }
   }, [sessionId]);
 
-  // Generate new QR code data with enhanced error handling and session activation
+  // Generate new QR code data with simplified approach
   const generateQRData = useCallback(async () => {
     // Prevent multiple simultaneous QR generation attempts
     if (refreshingQR) {
@@ -114,63 +80,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       // Always force activate the session before generating QR
       await forceActivateSession();
       
-      // Use a distinct check for the session to provide better error messages
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('attendance_sessions')
-        .select(`
-          id,
-          qr_secret, 
-          is_active
-        `)
-        .eq('id', sessionId as any)
-        .maybeSingle();
-      
-      if (sessionError) {
-        console.error('Error fetching session secret:', sessionError);
-        
-        // Check if it's a connection error
-        if (sessionError.message?.includes('network') || 
-            sessionError.message?.includes('Failed to fetch') ||
-            sessionError.message?.includes('timeout')) {
-          setConnectionError(true);
-          setError('Database connection error. Please check your internet connection.');
-        } else {
-          setError('Error fetching session data');
-        }
-        return;
-      }
-      
-      if (!sessionData) {
-        console.error('Session not found:', sessionId);
-        setError('Session not found');
-        return;
-      }
-      
-      console.log('Session data found:', {
-        id: sessionData?.id,
-        isActive: sessionData?.is_active
-      });
-      
-      setSessionActive(!!sessionData?.is_active);
-      
-      // If session exists but is not active, forcefully activate it again
-      if (!sessionData?.is_active) {
-        console.log('Session is not active, activating again...');
-        const activationSuccess = await forceActivateSession();
-        
-        if (!activationSuccess) {
-          setError('Unable to activate session. Please try resetting.');
-          return;
-        }
-      }
-      
-      // Create the QR code data with expiration time and ensure timestamp is recent
+      // Create the QR code data with expiration time
       const timestamp = Date.now();
       const expiresAt = timestamp + ((timeLeft + 5) * 1000); 
       
       // Create a simple QR data format that matches what the scanner expects
       const qrData = {
-        sessionId: sessionData?.id, // Use the verified session ID from the database
+        sessionId,
         timestamp,
         expiresAt,
         isActive: true // Explicitly include activation status
@@ -187,22 +103,19 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
     } catch (error: any) {
       console.error('Error generating QR code:', error);
-      
-      if (!connectionError) {
-        setError('Failed to generate QR code');
-        toast.error('Error generating QR code');
-      }
+      setError('Failed to generate QR code');
+      toast.error('Error generating QR code');
     } finally {
       setGenerating(false);
       setRefreshingQR(false);
     }
-  }, [sessionId, timeLeft, connectionError, forceActivateSession, refreshingQR]);
+  }, [sessionId, timeLeft, forceActivateSession, refreshingQR]);
 
-  // Set up aggressive keep-alive ping for session (every 20 seconds instead of 5)
+  // Set up keep-alive ping for session
   useEffect(() => {
     let pingInterval: ReturnType<typeof setInterval>;
     
-    // Create a ping interval (every 20 seconds)
+    // Create a ping interval (every 15 seconds)
     if (sessionId) {
       console.log('Setting up session keep-alive ping');
       pingInterval = setInterval(async () => {
@@ -212,29 +125,21 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
           const { error } = await supabase
             .from('attendance_sessions')
             .update({ 
-              is_active: true as any, 
+              is_active: true, 
               end_time: null 
-            } as any)
-            .eq('id', sessionId as any);
+            })
+            .eq('id', sessionId);
             
           if (error) {
             console.error('Error in keep-alive ping:', error);
-            // If ping fails, try force activation
             await forceActivateSession();
           } else {
-            // Check session is still active
-            const { data } = await supabase
-              .from('attendance_sessions')
-              .select('is_active')
-              .eq('id', sessionId as any)
-              .maybeSingle();
-              
-            setSessionActive(!!data?.is_active);
+            setSessionActive(true);
           }
         } catch (error) {
           console.error('Exception in keep-alive ping:', error);
         }
-      }, 20000); // Every 20 seconds
+      }, 15000); // Every 15 seconds
     }
     
     return () => {
@@ -242,15 +147,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     };
   }, [sessionId, forceActivateSession]);
 
-  // Timer for QR code refresh - FIX for continuous refreshing
+  // Timer for QR code refresh - fixed to avoid continuous refreshing
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    
     // Initial QR code generation
     generateQRData();
     
     // Set up timer to count down from 30 seconds
-    interval = setInterval(() => {
+    const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           // Time to generate a new QR code
@@ -262,21 +165,9 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     }, 1000);
     
     return () => {
-      if (interval) clearInterval(interval);
+      clearInterval(interval);
     };
-  }, []); // Only run on initial mount, not on every change to generateQRData
-
-  // Recovery mechanism for connection errors
-  useEffect(() => {
-    if (connectionError) {
-      const recoveryTimer = setTimeout(() => {
-        console.log('Attempting to recover from connection error...');
-        generateQRData();
-      }, 5000); // Try to recover after 5 seconds
-      
-      return () => clearTimeout(recoveryTimer);
-    }
-  }, [connectionError, generateQRData]);
+  }, []);  // Empty dependency array means this only runs once on mount
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -284,16 +175,14 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         <Alert className="border-red-200 bg-red-50 text-red-800 w-full">
           <AlertDescription className="flex justify-between items-center">
             <span>{error}</span>
-            {error.includes('activate') && (
-              <Button 
-                size="sm" 
-                variant="destructive" 
-                onClick={() => forceActivateSession()}
-                disabled={generating}
-              >
-                Retry
-              </Button>
-            )}
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={() => forceActivateSession()}
+              disabled={generating}
+            >
+              Retry
+            </Button>
           </AlertDescription>
         </Alert>
       )}

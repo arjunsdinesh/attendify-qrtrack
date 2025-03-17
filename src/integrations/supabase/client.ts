@@ -15,7 +15,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storageKey: 'supabase.auth.token', // Ensure consistent storage key
   },
   realtime: {
-    timeout: 30000, // Increased timeout for better connection stability
+    timeout: 60000, // Increased timeout for better connection stability
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -33,9 +33,9 @@ export const checkConnection = async (): Promise<boolean> => {
     // Use a longer timeout for connection check
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 8 seconds');
+      console.log('Connection check timed out after 10 seconds');
       controller.abort();
-    }, 8000);
+    }, 10000);
     
     // Use a simple count query to check connection
     const { data, error } = await supabase.from('profiles')
@@ -50,31 +50,6 @@ export const checkConnection = async (): Promise<boolean> => {
     }
     
     console.log('Main connection check successful');
-    
-    // Also verify access to attendance_sessions table
-    const { error: sessionCheckError } = await supabase
-      .from('attendance_sessions')
-      .select('count', { count: 'exact', head: true })
-      .limit(1);
-      
-    if (sessionCheckError) {
-      console.error('Sessions table access check failed:', sessionCheckError);
-      // Still return true since the initial connection worked
-    } else {
-      console.log('Sessions table access check successful');
-    }
-    
-    // Check attendance_records table access as well
-    const { error: recordsCheckError } = await supabase
-      .from('attendance_records')
-      .select('count', { count: 'exact', head: true })
-      .limit(1);
-      
-    if (recordsCheckError) {
-      console.error('Records table access check failed:', recordsCheckError);
-    } else {
-      console.log('Records table access check successful');
-    }
     
     return true;
   } catch (error) {
