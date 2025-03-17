@@ -29,8 +29,8 @@ const QRCodeScanner = () => {
     }
   }, [scanning]);
 
-  // Function to attempt to activate a session by its ID
-  const activateSession = useCallback(async (sessionId: string, maxRetries = 3) => {
+  // Function to aggressively attempt to activate a session by its ID with backoff retry
+  const activateSession = useCallback(async (sessionId: string, maxRetries = 5) => {
     if (!sessionId) return false;
     
     let currentRetry = 0;
@@ -40,7 +40,7 @@ const QRCodeScanner = () => {
       try {
         console.log(`Activating session ${sessionId} (Attempt ${currentRetry + 1}/${maxRetries})`);
         
-        // Force activate the session with a longer timeout
+        // Force activate the session with exponential backoff
         const { error: activateError } = await supabase
           .from('attendance_sessions')
           .update({ 
@@ -52,39 +52,49 @@ const QRCodeScanner = () => {
         if (!activateError) {
           console.log(`Successfully activated session ${sessionId}`);
           
-          // Verify the session is now active
-          const { data, error: verifyError } = await supabase
-            .from('attendance_sessions')
-            .select('is_active')
-            .eq('id', sessionId as any)
-            .maybeSingle();
+          // Verify the session is now active with multiple attempts
+          let verificationAttempt = 0;
+          while (verificationAttempt < 3) {
+            const { data, error: verifyError } = await supabase
+              .from('attendance_sessions')
+              .select('is_active')
+              .eq('id', sessionId as any)
+              .maybeSingle();
+              
+            if (!verifyError && data?.is_active) {
+              console.log(`Verified session ${sessionId} is active`);
+              setActivationInProgress(false);
+              return true;
+            }
             
-          if (!verifyError && data?.is_active) {
-            console.log(`Verified session ${sessionId} is active`);
-            setActivationInProgress(false);
-            return true;
+            console.log(`Verification attempt ${verificationAttempt + 1} failed, retrying...`);
+            verificationAttempt++;
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
         
         // If we're here, either the update failed or verification failed
-        console.error(`Failed to activate session ${sessionId} (Attempt ${currentRetry + 1}):`, 
-          activateError || "Verification failed");
+        console.error(`Failed to activate session ${sessionId} (Attempt ${currentRetry + 1})`);
           
-        // Wait longer between retries
-        await new Promise(resolve => setTimeout(resolve, 1000 * (currentRetry + 1)));
+        // Exponential backoff between retries (300ms, 600ms, 1200ms...)
+        const delay = Math.min(300 * Math.pow(2, currentRetry), 2000);
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
         currentRetry++;
       } catch (error) {
         console.error(`Error in activation attempt ${currentRetry + 1}:`, error);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (currentRetry + 1)));
+        const delay = Math.min(300 * Math.pow(2, currentRetry), 2000);
+        await new Promise(resolve => setTimeout(resolve, delay));
         currentRetry++;
       }
     }
     
     setActivationInProgress(false);
+    console.error(`Failed to activate session after ${maxRetries} attempts`);
     return false;
   }, []);
 
-  // Handle successful QR code scan
+  // Handle successful QR code scan with improved session activation
   const handleScan = async (result: any) => {
     try {
       if (!result || !result.length || !result[0]?.rawValue) {
@@ -145,17 +155,21 @@ const QRCodeScanner = () => {
         return;
       }
 
-      // Proactively try to activate the session with retries
-      const activationSuccessful = await activateSession(qrData.sessionId);
+      // Aggressively try to activate the session with multiple attempts
+      console.log('Proactively activating session before checking');
+      setActivationInProgress(true);
+      const activationAttemptResult = await activateSession(qrData.sessionId, 5);
+      setActivationInProgress(false);
       
-      if (!activationSuccessful && retryCount > 2) {
-        setError('Unable to activate session after multiple attempts. Please ask your teacher to refresh the QR code.');
-        setProcessing(false);
-        return;
+      if (!activationAttemptResult) {
+        console.warn('Session activation attempts failed, but continuing to verify session');
+      } else {
+        console.log('Session successfully activated');
       }
       
+      // Get session details with enhanced error handling
       try {
-        // Check if the session exists - improved error handling
+        // Always double check the session exists and fetch its details
         const { data: sessionData, error: sessionError } = await supabase
           .from('attendance_sessions')
           .select('is_active, id, class_id')
@@ -172,28 +186,27 @@ const QRCodeScanner = () => {
         if (!sessionData) {
           console.error('Session not found:', qrData.sessionId);
           
-          // Check if we should retry
+          // Make one last attempt to activate/create the session
           if (retryCount < 3) {
             setRetryCount(count => count + 1);
             setError('Attendance session not found, retrying activation...');
             
-            // Try to force activate again
-            const secondActivationAttempt = await activateSession(qrData.sessionId, 3);
+            // Try to force activate with more attempts
+            const lastActivationAttempt = await activateSession(qrData.sessionId, 5);
             
-            if (secondActivationAttempt) {
+            if (lastActivationAttempt) {
               // If activation was successful, retry the scan
               setProcessing(false);
               setTimeout(() => handleScan(result), 1000);
               return;
             } else {
-              setError('Unable to find or activate the session. Please ask your teacher to refresh the QR code.');
+              setError('Unable to find the attendance session. Please ask your teacher to check the QR code generator.');
               setProcessing(false);
               return;
             }
           }
           
-          // More informative error message with troubleshooting help
-          setError('Attendance session not found. Please make sure you are scanning a QR code from an active session. If the problem persists, ask your teacher to create a new session.');
+          setError('Attendance session not found. Please make sure you are scanning a QR code from an active session. Ask your teacher to refresh their QR code generator.');
           setProcessing(false);
           return;
         }
@@ -204,19 +217,20 @@ const QRCodeScanner = () => {
           isActive: sessionData?.is_active
         });
         
-        // If session exists but is not active, try to activate it
+        // Final check and activate attempt for inactive sessions
         if (!sessionData?.is_active) {
-          console.log('Found inactive session, attempting to reactivate...');
+          console.log('Session found but not active, making final activation attempt...');
           
-          const activateSuccess = await activateSession(qrData.sessionId, 2);
+          // Try one more time with max retries
+          const finalActivation = await activateSession(qrData.sessionId, 10);
           
-          if (!activateSuccess) {
-            setError('This attendance session is no longer active. Please ask your teacher to reactivate the session.');
+          if (!finalActivation) {
+            setError('This attendance session exists but is inactive. Please ask your teacher to reactivate the session.');
             setProcessing(false);
             return;
           }
           
-          console.log('Successfully reactivated session');
+          console.log('Successfully activated session on final attempt');
         }
         
         // Check if attendance was already marked for this session
@@ -326,7 +340,7 @@ const QRCodeScanner = () => {
           <Alert className="border-red-200 bg-red-50 text-red-800">
             <AlertDescription className="flex justify-between items-center">
               <span>{error}</span>
-              {(error.includes('not found') || error.includes('activate')) && (
+              {(error.includes('not found') || error.includes('inactive') || error.includes('activate')) && (
                 <Button 
                   size="sm" 
                   variant="outline" 
@@ -363,8 +377,10 @@ const QRCodeScanner = () => {
             {(processing || activationInProgress) && (
               <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
                 <LoadingSpinner className="h-10 w-10 border-4" />
-                {activationInProgress && (
+                {activationInProgress ? (
                   <p className="text-white mt-4">Activating session...</p>
+                ) : (
+                  <p className="text-white mt-4">Processing...</p>
                 )}
               </div>
             )}

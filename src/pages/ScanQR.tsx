@@ -9,6 +9,7 @@ import QRCodeScanner from '@/components/qr-code/QRCodeScanner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase, checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
+import { RefreshCw } from 'lucide-react';
 
 // Memoized component to prevent unnecessary re-renders
 const MemoizedQRScanner = memo(QRCodeScanner);
@@ -38,6 +39,19 @@ const ScanQR = () => {
         toast.error('Could not connect to the database. Check your internet connection.');
       } else {
         console.log('Database connection successful');
+        
+        // Also check if we can access attendance sessions table specifically
+        const { error: sessionCheckError } = await supabase
+          .from('attendance_sessions')
+          .select('count', { count: 'exact', head: true })
+          .limit(1);
+          
+        if (sessionCheckError) {
+          console.error('Cannot access attendance sessions:', sessionCheckError);
+          toast.warning('Connected to database, but attendance data may be unavailable');
+        } else {
+          toast.success('Successfully connected to attendance system');
+        }
       }
       
       return isConnected;
@@ -121,25 +135,39 @@ const ScanQR = () => {
         )}
         
         <div className="space-y-4 mb-4">
-          <Button 
-            onClick={resetScanner} 
-            variant="outline" 
-            size="sm" 
-            className="w-full"
-          >
-            Reset Scanner
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              onClick={resetScanner} 
+              variant="outline" 
+              size="sm" 
+              className="flex-1"
+            >
+              <RefreshCw className="h-4 w-4 mr-1" /> Reset Scanner
+            </Button>
+            
+            <Button
+              onClick={checkConnection}
+              variant="secondary"
+              size="sm"
+              className="flex-1"
+              disabled={isCheckingConnection}
+            >
+              {isCheckingConnection ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
+              Check Connection
+            </Button>
+          </div>
           
-          <Button
-            onClick={checkConnection}
-            variant="secondary"
-            size="sm"
-            className="w-full"
-            disabled={isCheckingConnection}
-          >
-            {isCheckingConnection ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
-            Check Connection
-          </Button>
+          <Alert className="bg-blue-50 border-blue-200 text-blue-700">
+            <AlertDescription>
+              If you're having trouble scanning, try these tips:
+              <ul className="list-disc ml-4 mt-1 text-xs">
+                <li>Make sure the QR code is clearly visible</li>
+                <li>Check your internet connection</li>
+                <li>Ask your teacher to refresh their QR code</li>
+                <li>Use the Reset Scanner button if needed</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
         </div>
         
         <MemoizedQRScanner key={`scanner-${scannerKey}`} />

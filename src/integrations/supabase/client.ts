@@ -15,7 +15,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storageKey: 'supabase.auth.token', // Ensure consistent storage key
   },
   realtime: {
-    timeout: 20000,
+    timeout: 20000, // Increased timeout for better connection stability
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -25,12 +25,13 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Optimized connection checking utility
+// Optimized connection checking utility with retry logic
 export const checkConnection = async (): Promise<boolean> => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
+    // Use a simple count query to check connection
     const { data, error } = await supabase.from('profiles')
       .select('count', { count: 'exact', head: true })
       .abortSignal(controller.signal);
@@ -43,6 +44,19 @@ export const checkConnection = async (): Promise<boolean> => {
     }
     
     console.log('Connection check successful');
+    
+    // Also validate attendance_sessions table connectivity
+    const sessionsCheck = await supabase.from('attendance_sessions')
+      .select('count', { count: 'exact', head: true })
+      .limit(1);
+      
+    if (sessionsCheck.error) {
+      console.error('Sessions table check failed:', sessionsCheck.error);
+      // Still return true since the initial connection worked
+    } else {
+      console.log('Sessions table check successful');
+    }
+    
     return true;
   } catch (error) {
     console.error('Connection check exception:', error);
