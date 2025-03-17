@@ -19,6 +19,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<boolean>(false);
+  const [retryCount, setRetryCount] = useState<number>(0);
 
   // Generate new QR code data
   const generateQRData = async () => {
@@ -35,13 +36,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       console.log('Generating QR code for session:', sessionId);
       
-      // Check if the session still exists and is active
+      // Check if the session exists and ensure it's active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select(`
+          id,
           qr_secret, 
-          is_active,
-          id
+          is_active
         `)
         .eq('id', sessionId)
         .maybeSingle();
@@ -73,24 +74,40 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         isActive: sessionData.is_active
       });
       
-      // Ensure the session is still active
+      // If session exists but is not active, forcefully activate it
       if (!sessionData.is_active) {
-        console.log('Session is not active, attempting to reactivate...');
+        console.log('Session is not active, forcefully activating it...');
         
-        // Try to reactivate the session
+        // Activate the session
         const { error: updateError } = await supabase
           .from('attendance_sessions')
           .update({ is_active: true })
           .eq('id', sessionId);
           
         if (updateError) {
-          console.error('Error reactivating session:', updateError);
-          setError('Unable to reactivate this session');
-          onEndSession();
+          console.error('Error activating session:', updateError);
+          
+          // If we've already tried several times, give up
+          if (retryCount >= 3) {
+            setError('Unable to activate this session after multiple attempts');
+            onEndSession();
+            return;
+          }
+          
+          // Increment retry count
+          setRetryCount(prev => prev + 1);
+          setError('Trying to reactivate session... Please wait.');
+          
+          // Try again after a delay
+          setTimeout(generateQRData, 1000);
           return;
         }
         
-        console.log('Session reactivated successfully');
+        console.log('Session activated successfully');
+        toast.success('Session activated successfully');
+        
+        // Reset retry count after successful activation
+        setRetryCount(0);
       }
       
       // Create the QR code data with expiration time
@@ -120,6 +137,44 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         setError('Failed to generate QR code');
         toast.error('Error generating QR code');
       }
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Function to forcefully reactivate session
+  const forceReactivateSession = async () => {
+    try {
+      setError(null);
+      setGenerating(true);
+      
+      console.log('Forcefully reactivating session:', sessionId);
+      
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true,
+          end_time: null // Clear end time if it was set
+        })
+        .eq('id', sessionId);
+        
+      if (error) {
+        console.error('Error reactivating session:', error);
+        setError('Failed to reactivate session');
+        toast.error('Failed to reactivate session');
+        return;
+      }
+      
+      console.log('Session reactivated successfully');
+      toast.success('Session reactivated successfully');
+      setRetryCount(0);
+      
+      // Regenerate QR code
+      generateQRData();
+      
+    } catch (error) {
+      console.error('Error in forceReactivateSession:', error);
+      setError('Failed to reactivate session');
     } finally {
       setGenerating(false);
     }
@@ -163,7 +218,19 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     <div className="flex flex-col items-center space-y-4">
       {error && (
         <Alert className="border-red-200 bg-red-50 text-red-800 w-full">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription className="flex justify-between items-center">
+            <span>{error}</span>
+            {error.includes('activate') && (
+              <Button 
+                size="sm" 
+                variant="destructive" 
+                onClick={forceReactivateSession}
+                disabled={generating}
+              >
+                Retry
+              </Button>
+            )}
+          </AlertDescription>
         </Alert>
       )}
       
@@ -194,6 +261,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       <p className="text-sm text-center text-muted-foreground">
         Show this QR code to your students. It will refresh automatically every 30 seconds.
       </p>
+      <Button 
+        onClick={forceReactivateSession} 
+        className="w-full bg-green-600 hover:bg-green-700 mt-2"
+        disabled={generating}
+      >
+        {generating ? <LoadingSpinner className="h-4 w-4" /> : 'Reactivate Session'}
+      </Button>
       <Button 
         onClick={onEndSession}
         className="w-full bg-destructive hover:bg-destructive/90"

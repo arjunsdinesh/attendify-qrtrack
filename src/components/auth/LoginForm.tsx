@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui-components';
 import { AlertCircle, Mail } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { toast } from 'sonner';
 
 // Login form schema
 const loginSchema = z.object({
@@ -42,6 +43,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
   const onLoginSubmit = async (values: LoginFormValues) => {
     if (connectionStatus === 'disconnected') {
       setFormError('Cannot connect to the database. Please check your Supabase configuration.');
+      toast.error('Database connection error. Please check your Supabase configuration.');
       return;
     }
     
@@ -49,14 +51,26 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     setIsEmailNotConfirmed(false);
     
     try {
+      console.log('Attempting to sign in with:', values.email);
       await signIn(values.email, values.password);
+      toast.success('Login successful!');
     } catch (error: any) {
+      console.error('Login error:', error);
+      
       if (error.message?.includes('Email not confirmed') || error.code === 'email_not_confirmed') {
         setIsEmailNotConfirmed(true);
         setUnconfirmedEmail(values.email);
         setFormError('Your email has not been confirmed. Please check your inbox for the confirmation link.');
+        toast.error('Email not confirmed. Please check your inbox.');
+      } else if (error.message?.includes('Invalid login credentials')) {
+        setFormError('Invalid email or password. Please try again.');
+        toast.error('Invalid login credentials');
+      } else if (error.message?.includes('rate limit')) {
+        setFormError('Too many login attempts. Please try again later.');
+        toast.error('Rate limit exceeded');
       } else {
-        setFormError(error.message || 'Failed to sign in. Please check your Supabase configuration.');
+        setFormError(error.message || 'Failed to sign in. Please check your credentials.');
+        toast.error('Login failed. Please try again.');
       }
     }
   };
