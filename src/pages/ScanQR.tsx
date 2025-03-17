@@ -1,5 +1,5 @@
 
-import { useEffect, memo, useState } from 'react';
+import { useEffect, memo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -7,7 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import QRCodeScanner from '@/components/qr-code/QRCodeScanner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/utils/supabase';
+import { supabase, checkSupabaseConnection } from '@/utils/supabase';
+import { toast } from 'sonner';
 
 // Memoized component to prevent unnecessary re-renders
 const MemoizedQRScanner = memo(QRCodeScanner);
@@ -17,36 +18,42 @@ const ScanQR = () => {
   const { user, loading } = useAuth();
   const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
   const [scannerKey, setScannerKey] = useState<number>(Date.now());
+  const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   
   // Reset scanner state
-  const resetScanner = () => {
+  const resetScanner = useCallback(() => {
     setScannerKey(Date.now());
-  };
+    toast.info("Scanner reset. Try scanning again.");
+  }, []);
+  
+  // Function to check database connection with enhanced error handling
+  const checkConnection = useCallback(async () => {
+    try {
+      setIsCheckingConnection(true);
+      const isConnected = await checkSupabaseConnection();
+      setConnectionStatus(isConnected);
+      
+      if (!isConnected) {
+        console.error('Failed to connect to database');
+        toast.error('Could not connect to the database. Check your internet connection.');
+      } else {
+        console.log('Database connection successful');
+      }
+      
+      return isConnected;
+    } catch (error) {
+      console.error('Error checking connection:', error);
+      setConnectionStatus(false);
+      toast.error('Connection error. Please check your internet and try again.');
+      return false;
+    } finally {
+      setIsCheckingConnection(false);
+    }
+  }, []);
   
   // Check for active attendance sessions when the page loads
   useEffect(() => {
-    const checkForActiveSessions = async () => {
-      try {
-        // Test the database connection
-        const { data, error } = await supabase
-          .from('attendance_sessions')
-          .select('count', { count: 'exact', head: true })
-          .limit(1);
-          
-        if (error) {
-          console.error('Database connection check failed:', error);
-          setConnectionStatus(false);
-        } else {
-          console.log('Database connection successful');
-          setConnectionStatus(true);
-        }
-      } catch (error) {
-        console.error('Error checking for active sessions:', error);
-        setConnectionStatus(false);
-      }
-    };
-    
-    checkForActiveSessions();
+    checkConnection();
     
     // Reset scanner every 2 minutes to ensure fresh state
     const resetInterval = setInterval(resetScanner, 120000);
@@ -54,7 +61,7 @@ const ScanQR = () => {
     return () => {
       clearInterval(resetInterval);
     };
-  }, []);
+  }, [resetScanner, checkConnection]);
   
   useEffect(() => {
     if (!loading && user && user.role !== 'student') {
@@ -99,13 +106,21 @@ const ScanQR = () => {
         
         {connectionStatus === false && (
           <Alert className="mb-4 border-red-200 bg-red-50 text-red-800">
-            <AlertDescription>
-              Could not connect to the database. Please check your internet connection and refresh the page.
+            <AlertDescription className="flex justify-between items-center">
+              <span>Could not connect to the database. Please check your internet connection.</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={checkConnection}
+                disabled={isCheckingConnection}
+              >
+                {isCheckingConnection ? <LoadingSpinner className="h-4 w-4" /> : 'Retry'}
+              </Button>
             </AlertDescription>
           </Alert>
         )}
         
-        <div className="mb-4">
+        <div className="space-y-4 mb-4">
           <Button 
             onClick={resetScanner} 
             variant="outline" 
@@ -113,6 +128,17 @@ const ScanQR = () => {
             className="w-full"
           >
             Reset Scanner
+          </Button>
+          
+          <Button
+            onClick={checkConnection}
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            disabled={isCheckingConnection}
+          >
+            {isCheckingConnection ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
+            Check Connection
           </Button>
         </div>
         

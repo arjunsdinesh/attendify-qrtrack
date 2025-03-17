@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -7,7 +7,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { QrCode, X, CheckCircle2 } from 'lucide-react';
+import { QrCode, X, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const QRCodeScanner = () => {
@@ -19,6 +19,7 @@ const QRCodeScanner = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
+  const [activationInProgress, setActivationInProgress] = useState(false);
 
   // Reset error when starting or stopping scanning
   useEffect(() => {
@@ -27,6 +28,61 @@ const QRCodeScanner = () => {
       setSuccessMessage(null);
     }
   }, [scanning]);
+
+  // Function to attempt to activate a session by its ID
+  const activateSession = useCallback(async (sessionId: string, maxRetries = 3) => {
+    if (!sessionId) return false;
+    
+    let currentRetry = 0;
+    setActivationInProgress(true);
+    
+    while (currentRetry < maxRetries) {
+      try {
+        console.log(`Activating session ${sessionId} (Attempt ${currentRetry + 1}/${maxRetries})`);
+        
+        // Force activate the session with a longer timeout
+        const { error: activateError } = await supabase
+          .from('attendance_sessions')
+          .update({ 
+            is_active: true as any, 
+            end_time: null 
+          } as any)
+          .eq('id', sessionId as any);
+          
+        if (!activateError) {
+          console.log(`Successfully activated session ${sessionId}`);
+          
+          // Verify the session is now active
+          const { data, error: verifyError } = await supabase
+            .from('attendance_sessions')
+            .select('is_active')
+            .eq('id', sessionId as any)
+            .maybeSingle();
+            
+          if (!verifyError && data?.is_active) {
+            console.log(`Verified session ${sessionId} is active`);
+            setActivationInProgress(false);
+            return true;
+          }
+        }
+        
+        // If we're here, either the update failed or verification failed
+        console.error(`Failed to activate session ${sessionId} (Attempt ${currentRetry + 1}):`, 
+          activateError || "Verification failed");
+          
+        // Wait longer between retries
+        await new Promise(resolve => setTimeout(resolve, 1000 * (currentRetry + 1)));
+        currentRetry++;
+      } catch (error) {
+        console.error(`Error in activation attempt ${currentRetry + 1}:`, error);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (currentRetry + 1)));
+        currentRetry++;
+      }
+    }
+    
+    setActivationInProgress(false);
+    return false;
+  }, []);
 
   // Handle successful QR code scan
   const handleScan = async (result: any) => {
@@ -78,7 +134,7 @@ const QRCodeScanner = () => {
         return;
       }
       
-      console.log('Checking session: ', qrData.sessionId);
+      console.log('Processing session: ', qrData.sessionId);
       
       // Verify that the sessionId is a valid UUID
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -89,19 +145,13 @@ const QRCodeScanner = () => {
         return;
       }
 
-      // Attempt to activate the session if it exists (regardless of current state)
-      try {
-        console.log('Preemptively activating session:', qrData.sessionId);
-        await supabase
-          .from('attendance_sessions')
-          .update({ 
-            is_active: true, 
-            end_time: null 
-          } as any)
-          .eq('id', qrData.sessionId);
-      } catch (activateError) {
-        console.error('Error in preemptive activation:', activateError);
-        // Continue anyway as this is just a precaution
+      // Proactively try to activate the session with retries
+      const activationSuccessful = await activateSession(qrData.sessionId);
+      
+      if (!activationSuccessful && retryCount > 2) {
+        setError('Unable to activate session after multiple attempts. Please ask your teacher to refresh the QR code.');
+        setProcessing(false);
+        return;
       }
       
       try {
@@ -109,7 +159,7 @@ const QRCodeScanner = () => {
         const { data: sessionData, error: sessionError } = await supabase
           .from('attendance_sessions')
           .select('is_active, id, class_id')
-          .eq('id', qrData.sessionId)
+          .eq('id', qrData.sessionId as any)
           .maybeSingle();
         
         if (sessionError) {
@@ -123,16 +173,23 @@ const QRCodeScanner = () => {
           console.error('Session not found:', qrData.sessionId);
           
           // Check if we should retry
-          if (retryCount < 2) {
+          if (retryCount < 3) {
             setRetryCount(count => count + 1);
-            setError('Attendance session not found. Retrying...');
+            setError('Attendance session not found, retrying activation...');
             
-            // Wait briefly and try again
-            setTimeout(() => {
+            // Try to force activate again
+            const secondActivationAttempt = await activateSession(qrData.sessionId, 3);
+            
+            if (secondActivationAttempt) {
+              // If activation was successful, retry the scan
               setProcessing(false);
-              handleScan(result);
-            }, 1500);
-            return;
+              setTimeout(() => handleScan(result), 1000);
+              return;
+            } else {
+              setError('Unable to find or activate the session. Please ask your teacher to refresh the QR code.');
+              setProcessing(false);
+              return;
+            }
           }
           
           // More informative error message with troubleshooting help
@@ -151,17 +208,10 @@ const QRCodeScanner = () => {
         if (!sessionData?.is_active) {
           console.log('Found inactive session, attempting to reactivate...');
           
-          const { error: activateError } = await supabase
-            .from('attendance_sessions')
-            .update({ 
-              is_active: true, 
-              end_time: null 
-            } as any)
-            .eq('id', qrData.sessionId);
-            
-          if (activateError) {
-            console.error('Error activating session:', activateError);
-            setError('This attendance session is no longer active. Please ask your teacher to start a new session.');
+          const activateSuccess = await activateSession(qrData.sessionId, 2);
+          
+          if (!activateSuccess) {
+            setError('This attendance session is no longer active. Please ask your teacher to reactivate the session.');
             setProcessing(false);
             return;
           }
@@ -173,7 +223,7 @@ const QRCodeScanner = () => {
         const { data: existingRecord, error: existingError } = await supabase
           .from('attendance_records')
           .select('id')
-          .eq('session_id', qrData.sessionId)
+          .eq('session_id', qrData.sessionId as any)
           .eq('student_id', user.id as any)
           .maybeSingle();
         
@@ -200,7 +250,7 @@ const QRCodeScanner = () => {
           .from('attendance_records')
           .insert({
             session_id: qrData.sessionId,
-            student_id: user.id as any,
+            student_id: user.id,
             timestamp: new Date().toISOString()
           } as any);
         
@@ -274,7 +324,25 @@ const QRCodeScanner = () => {
       <CardContent className="flex flex-col items-center space-y-5 p-6">
         {error && (
           <Alert className="border-red-200 bg-red-50 text-red-800">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="flex justify-between items-center">
+              <span>{error}</span>
+              {(error.includes('not found') || error.includes('activate')) && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => {
+                    setError(null);
+                    setRetryCount(0);
+                    if (scanning) toggleScanner(); // Turn off scanner
+                    setTimeout(() => toggleScanner(), 500); // Turn on scanner
+                  }}
+                  className="ml-2 flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Retry</span>
+                </Button>
+              )}
+            </AlertDescription>
           </Alert>
         )}
         
@@ -292,9 +360,12 @@ const QRCodeScanner = () => {
               scanDelay={500}
               constraints={{ facingMode: 'environment' }}
             />
-            {processing && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-xl backdrop-blur-sm">
+            {(processing || activationInProgress) && (
+              <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
                 <LoadingSpinner className="h-10 w-10 border-4" />
+                {activationInProgress && (
+                  <p className="text-white mt-4">Activating session...</p>
+                )}
               </div>
             )}
           </div>
@@ -312,10 +383,13 @@ const QRCodeScanner = () => {
         <Button 
           onClick={toggleScanner}
           className={`w-full py-6 text-base font-medium ${scanning ? 'bg-red-500 hover:bg-red-600' : 'bg-brand-600 hover:bg-brand-700'} rounded-xl transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1`}
-          disabled={processing || recentlyMarked}
+          disabled={processing || recentlyMarked || activationInProgress}
         >
-          {processing ? (
-            <LoadingSpinner className="h-5 w-5" />
+          {processing || activationInProgress ? (
+            <span className="flex items-center gap-2">
+              <LoadingSpinner className="h-5 w-5" />
+              {activationInProgress ? 'Activating Session...' : 'Processing...'}
+            </span>
           ) : recentlyMarked ? (
             <span className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5" />
