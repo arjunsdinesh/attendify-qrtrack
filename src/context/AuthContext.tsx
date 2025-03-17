@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
 import { toast } from 'sonner';
@@ -73,22 +74,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (userId: string) => {
     try {
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
-        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-        supabase.from('student_profiles').select('*').eq('id', userId).maybeSingle(),
-        supabase.from('teacher_profiles').select('*').eq('id', userId).maybeSingle()
+        supabase.from('profiles').select('*').eq('id', userId as any).maybeSingle(),
+        supabase.from('student_profiles').select('*').eq('id', userId as any).maybeSingle(),
+        supabase.from('teacher_profiles').select('*').eq('id', userId as any).maybeSingle()
       ]);
       
       if (profileResponse.status === 'fulfilled' && profileResponse.value.data) {
-        setUser(profileResponse.value.data as Profile);
+        const profileData = profileResponse.value.data as any;
+        setUser(profileData as Profile);
         
-        if (profileResponse.value.data.role === 'student' && 
+        if (profileData.role === 'student' && 
             studentResponse.status === 'fulfilled' && 
             studentResponse.value.data) {
-          setStudentProfile(studentResponse.value.data as StudentProfile);
-        } else if (profileResponse.value.data.role === 'teacher' && 
+          setStudentProfile(studentResponse.value.data as any);
+        } else if (profileData.role === 'teacher' && 
                    teacherResponse.status === 'fulfilled' && 
                    teacherResponse.value.data) {
-          setTeacherProfile(teacherResponse.value.data as TeacherProfile);
+          setTeacherProfile(teacherResponse.value.data as any);
         }
       }
     } catch (error) {
@@ -120,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: profileData } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', data.user.id)
+          .eq('id', data.user.id as any)
           .single();
         
         console.log('Login successful, redirecting based on role:', profileData?.role);
@@ -158,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: existingUser, error: searchError } = await supabase
           .from('student_profiles')
           .select('id')
-          .eq('register_number', registerNumber)
+          .eq('register_number', registerNumber as any)
           .maybeSingle();
           
         if (searchError) {
@@ -191,42 +193,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.user) {
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert([
-            {
-              id: data.user.id,
-              email,
-              full_name: fullName,
-              role,
-            }
-          ]);
+          .insert({
+            id: data.user.id,
+            email,
+            full_name: fullName,
+            role
+          } as any);
 
         if (profileError) throw profileError;
         
         if (role === 'student') {
           const { error: studentError } = await supabase
             .from('student_profiles')
-            .insert([
-              {
-                id: data.user.id,
-                register_number: registerNumber || '',
-                roll_number: '',
-                department: '',
-                semester: 1,
-              }
-            ]);
+            .insert({
+              id: data.user.id,
+              register_number: registerNumber || '',
+              roll_number: '',
+              department: '',
+              semester: 1
+            } as any);
           
           if (studentError) throw studentError;
         } else if (role === 'teacher') {
           const { error: teacherError } = await supabase
             .from('teacher_profiles')
-            .insert([
-              {
-                id: data.user.id,
-                employee_id: '',
-                department: '',
-                designation: '',
-              }
-            ]);
+            .insert({
+              id: data.user.id,
+              employee_id: '',
+              department: '',
+              designation: ''
+            } as any);
           
           if (teacherError) throw teacherError;
         }

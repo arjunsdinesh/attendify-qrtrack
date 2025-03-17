@@ -16,6 +16,12 @@ const ScanQR = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
+  const [scannerKey, setScannerKey] = useState<number>(Date.now());
+  
+  // Reset scanner state
+  const resetScanner = () => {
+    setScannerKey(Date.now());
+  };
   
   // Check for active attendance sessions when the page loads
   useEffect(() => {
@@ -41,6 +47,13 @@ const ScanQR = () => {
     };
     
     checkForActiveSessions();
+    
+    // Reset scanner every 2 minutes to ensure fresh state
+    const resetInterval = setInterval(resetScanner, 120000);
+    
+    return () => {
+      clearInterval(resetInterval);
+    };
   }, []);
   
   useEffect(() => {
@@ -92,7 +105,18 @@ const ScanQR = () => {
           </Alert>
         )}
         
-        <MemoizedQRScanner key={`scanner-${Date.now()}`} />
+        <div className="mb-4">
+          <Button 
+            onClick={resetScanner} 
+            variant="outline" 
+            size="sm" 
+            className="w-full"
+          >
+            Reset Scanner
+          </Button>
+        </div>
+        
+        <MemoizedQRScanner key={`scanner-${scannerKey}`} />
       </div>
     </DashboardLayout>
   );

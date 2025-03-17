@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -68,7 +69,7 @@ const AttendanceHistory = ({ userId }: { userId: string }) => {
             )
           )
         `)
-        .eq('student_id', userId)
+        .eq('student_id', userId as any)
         .order('timestamp', { ascending: false });
       
       const now = new Date();

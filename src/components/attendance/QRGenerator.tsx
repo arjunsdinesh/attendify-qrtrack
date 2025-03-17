@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
@@ -38,8 +39,11 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       // Force activate session every time we generate a new QR code
       const { error: activateError } = await supabase
         .from('attendance_sessions')
-        .update({ is_active: true, end_time: null })
-        .eq('id', sessionId);
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        } as any)
+        .eq('id', sessionId as any);
         
       if (activateError) {
         console.error('Error activating session on QR generate:', activateError);
@@ -56,7 +60,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
           qr_secret, 
           is_active
         `)
-        .eq('id', sessionId)
+        .eq('id', sessionId as any)
         .maybeSingle();
       
       if (sessionError) {
@@ -82,19 +86,22 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       }
       
       console.log('Session data found:', {
-        id: sessionData.id,
-        isActive: sessionData.is_active
+        id: sessionData?.id,
+        isActive: sessionData?.is_active
       });
       
       // If session exists but is not active, forcefully activate it
-      if (!sessionData.is_active) {
+      if (!sessionData?.is_active) {
         console.log('Session is not active, forcefully activating it...');
         
         // Activate the session
         const { error: updateError } = await supabase
           .from('attendance_sessions')
-          .update({ is_active: true, end_time: null })
-          .eq('id', sessionId);
+          .update({ 
+            is_active: true, 
+            end_time: null 
+          } as any)
+          .eq('id', sessionId as any);
           
         if (updateError) {
           console.error('Error activating session:', updateError);
@@ -128,7 +135,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       // Create a simple QR data format that matches what the scanner expects
       const qrData = {
-        sessionId: sessionData.id, // Use the verified session ID from the database
+        sessionId: sessionData?.id, // Use the verified session ID from the database
         timestamp,
         expiresAt
       };
@@ -145,8 +152,8 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       // Ping the session to keep it active
       const { error: pingError } = await supabase
         .from('attendance_sessions')
-        .update({ is_active: true })
-        .eq('id', sessionId);
+        .update({ is_active: true } as any)
+        .eq('id', sessionId as any);
         
       if (pingError) {
         console.error('Error pinging session:', pingError);
@@ -178,8 +185,8 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         .update({ 
           is_active: true,
           end_time: null // Clear end time if it was set
-        })
-        .eq('id', sessionId);
+        } as any)
+        .eq('id', sessionId as any);
         
       if (error) {
         console.error('Error reactivating session:', error);
@@ -247,8 +254,11 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         
         const { error } = await supabase
           .from('attendance_sessions')
-          .update({ is_active: true, end_time: null })
-          .eq('id', sessionId);
+          .update({ 
+            is_active: true, 
+            end_time: null 
+          } as any)
+          .eq('id', sessionId as any);
           
         if (error) {
           console.error('Error in keep-alive ping:', error);

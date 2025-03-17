@@ -43,8 +43,8 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         const { data, error } = await supabase
           .from('attendance_sessions')
           .select('id, class_id, classes(name)')
-          .eq('created_by', userId)
-          .eq('is_active', true)
+          .eq('created_by', userId as any)
+          .eq('is_active', true as any)
           .maybeSingle();
         
         if (error) throw error;
@@ -52,11 +52,11 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         // If an active session exists, restore it
         if (data) {
           console.log('Found active session:', data);
-          setSessionId(data.id);
-          setClassId(data.class_id);
+          setSessionId(data?.id);
+          setClassId(data?.class_id);
           
           // Extract class name - safely handling the type
-          if (data.classes) {
+          if (data?.classes) {
             let classNameValue = 'Unknown Class';
             
             // Handle case where it might be an array due to Supabase join
@@ -99,7 +99,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         const { data, error } = await supabase
           .from('classes')
           .select('id, name')
-          .eq('teacher_id', userId);
+          .eq('teacher_id', userId as any);
         
         if (error) throw error;
         
@@ -109,7 +109,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         if (preselectedClassId && data) {
           const selectedClass = data.find(c => c.id === preselectedClassId);
           if (selectedClass) {
-            setClassName(selectedClass.name);
+            setClassName(selectedClass?.name);
           }
         }
       } catch (error: any) {
@@ -151,9 +151,12 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       // to ensure we don't have multiple active sessions
       const { error: deactivateError } = await supabase
         .from('attendance_sessions')
-        .update({ is_active: false, end_time: new Date().toISOString() })
-        .eq('created_by', userId)
-        .eq('is_active', true);
+        .update({ 
+          is_active: false, 
+          end_time: new Date().toISOString() 
+        } as any)
+        .eq('created_by', userId as any)
+        .eq('is_active', true as any);
         
       if (deactivateError) {
         console.error('Error deactivating existing sessions:', deactivateError);
@@ -175,13 +178,13 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
-          created_by: userId,
+          created_by: userId as any,
           class_id: selectedClassId,
           qr_secret: secret,
-          is_active: true,
+          is_active: true as any,
           start_time: new Date().toISOString(),
           date: new Date().toISOString().split('T')[0]
-        })
+        } as any)
         .select()
         .single();
       
@@ -211,7 +214,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           // If for some reason it's not active, try to update it
           const { error: updateError } = await supabase
             .from('attendance_sessions')
-            .update({ is_active: true })
+            .update({ is_active: true } as any)
             .eq('id', data.id);
             
           if (updateError) {
@@ -242,8 +245,11 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       // Update the session to mark it as inactive
       const { error } = await supabase
         .from('attendance_sessions')
-        .update({ is_active: false, end_time: new Date().toISOString() })
-        .eq('id', sessionId);
+        .update({ 
+          is_active: false, 
+          end_time: new Date().toISOString() 
+        } as any)
+        .eq('id', sessionId as any);
       
       if (error) throw error;
       

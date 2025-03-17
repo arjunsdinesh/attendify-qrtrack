@@ -47,24 +47,24 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select('qr_secret')
-        .eq('id', sessionId)
+        .eq('id', sessionId as any)
         .single();
       
       if (sessionError) throw sessionError;
       
-      const secret = sessionData.qr_secret;
+      const secret = sessionData?.qr_secret;
       
       // Create the QR code data
       const timestamp = Date.now();
       const qrData = {
         sessionId,
         timestamp,
-        secret: secret.substring(0, 8), // Only share a part of the secret
+        secret: secret?.substring(0, 8), // Only share a part of the secret
         classId
       };
       
       // Generate a signature to verify the QR code hasn't been tampered with
-      const signature = createSignature(qrData, secret);
+      const signature = createSignature(qrData, secret || '');
       
       const finalData = { ...qrData, signature };
       setQrValue(JSON.stringify(finalData));
@@ -88,8 +88,11 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
       // Update the session with the new secret and mark it as active
       const { error } = await supabase
         .from('attendance_sessions')
-        .update({ qr_secret: secret, is_active: true })
-        .eq('id', sessionId);
+        .update({ 
+          qr_secret: secret, 
+          is_active: true 
+        } as any)
+        .eq('id', sessionId as any);
       
       if (error) throw error;
       
@@ -112,8 +115,11 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
       // Update the session to mark it as inactive
       const { error } = await supabase
         .from('attendance_sessions')
-        .update({ is_active: false, end_time: new Date().toISOString() })
-        .eq('id', sessionId);
+        .update({ 
+          is_active: false, 
+          end_time: new Date().toISOString() 
+        } as any)
+        .eq('id', sessionId as any);
       
       if (error) throw error;
       
@@ -131,12 +137,12 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
         const { data, error } = await supabase
           .from('attendance_sessions')
           .select('is_active, qr_secret')
-          .eq('id', sessionId)
+          .eq('id', sessionId as any)
           .single();
         
         if (error) throw error;
         
-        if (data.is_active) {
+        if (data?.is_active) {
           setActive(true);
           await generateQRData();
         }

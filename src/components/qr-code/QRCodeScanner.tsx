@@ -94,7 +94,10 @@ const QRCodeScanner = () => {
         console.log('Preemptively activating session:', qrData.sessionId);
         await supabase
           .from('attendance_sessions')
-          .update({ is_active: true, end_time: null })
+          .update({ 
+            is_active: true, 
+            end_time: null 
+          } as any)
           .eq('id', qrData.sessionId);
       } catch (activateError) {
         console.error('Error in preemptive activation:', activateError);
@@ -139,18 +142,21 @@ const QRCodeScanner = () => {
         }
         
         console.log('Session data found:', {
-          id: sessionData.id,
-          classId: sessionData.class_id,
-          isActive: sessionData.is_active
+          id: sessionData?.id,
+          classId: sessionData?.class_id,
+          isActive: sessionData?.is_active
         });
         
         // If session exists but is not active, try to activate it
-        if (!sessionData.is_active) {
+        if (!sessionData?.is_active) {
           console.log('Found inactive session, attempting to reactivate...');
           
           const { error: activateError } = await supabase
             .from('attendance_sessions')
-            .update({ is_active: true, end_time: null })
+            .update({ 
+              is_active: true, 
+              end_time: null 
+            } as any)
             .eq('id', qrData.sessionId);
             
           if (activateError) {
@@ -168,7 +174,7 @@ const QRCodeScanner = () => {
           .from('attendance_records')
           .select('id')
           .eq('session_id', qrData.sessionId)
-          .eq('student_id', user.id)
+          .eq('student_id', user.id as any)
           .maybeSingle();
         
         if (existingError) {
@@ -192,13 +198,11 @@ const QRCodeScanner = () => {
         // Create attendance record
         const { error: insertError } = await supabase
           .from('attendance_records')
-          .insert([
-            {
-              session_id: qrData.sessionId,
-              student_id: user.id,
-              timestamp: new Date().toISOString(),
-            }
-          ]);
+          .insert({
+            session_id: qrData.sessionId,
+            student_id: user.id as any,
+            timestamp: new Date().toISOString()
+          } as any);
         
         if (insertError) {
           console.error('Insert error:', insertError);

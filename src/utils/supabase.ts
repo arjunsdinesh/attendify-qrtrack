@@ -1,6 +1,7 @@
 
 import { supabase as supabaseClient, checkConnection } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { type PostgrestError } from '@supabase/supabase-js';
 
 // Re-export the Supabase client
 export const supabase = supabaseClient;
@@ -68,9 +69,11 @@ export interface AttendanceRecord {
 }
 
 // Error handler for Supabase operations
-export const handleSupabaseError = (error: any, customMessage?: string) => {
-  console.error('Supabase error:', error);
-  toast.error(customMessage || error.message || 'An error occurred');
+export const handleSupabaseError = (error: PostgrestError | null, customMessage?: string) => {
+  if (error) {
+    console.error('Supabase error:', error);
+    toast.error(customMessage || error.message || 'An error occurred');
+  }
   return null;
 };
 
@@ -95,7 +98,7 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', user.id as string)
       .single();
 
     if (error) {
@@ -103,9 +106,9 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
       return null;
     }
 
-    return data as Profile;
+    return data as unknown as Profile;
   } catch (error) {
-    handleSupabaseError(error, 'Failed to get current user profile');
+    handleSupabaseError(error as PostgrestError, 'Failed to get current user profile');
     return null;
   }
 };
