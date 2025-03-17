@@ -24,18 +24,20 @@ export interface Profile {
   updated_at: string;
 }
 
-export interface StudentProfile extends Profile {
-  register_number: string;
-  roll_number: string;
-  department: string;
-  semester: number;
-  class_id: string;
+export interface StudentProfile {
+  id: string;
+  register_number: string | null;
+  roll_number: string | null;
+  department: string | null;
+  semester: number | null;
+  class_id: string | null;
 }
 
-export interface TeacherProfile extends Profile {
-  employee_id: string;
-  department: string;
-  designation: string;
+export interface TeacherProfile {
+  id: string;
+  employee_id: string | null;
+  department: string | null;
+  designation: string | null;
 }
 
 export interface Class {
@@ -93,21 +95,26 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (!user) return null;
+    if (!user) {
+      console.log('No authenticated user found');
+      return null;
+    }
 
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id as string)
-      .single();
+      .eq('id', user.id)
+      .maybeSingle();
 
     if (error) {
       handleSupabaseError(error, 'Failed to fetch user profile');
       return null;
     }
 
+    console.log('Retrieved user profile:', data);
     return data as unknown as Profile;
   } catch (error) {
+    console.error('Failed to get current user profile:', error);
     handleSupabaseError(error as PostgrestError, 'Failed to get current user profile');
     return null;
   }

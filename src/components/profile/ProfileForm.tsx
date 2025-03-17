@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -64,10 +65,24 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
     },
   });
 
+  // Log profiles for debugging
+  useEffect(() => {
+    console.log('User profile data:', { user, studentProfile, teacherProfile });
+  }, [user, studentProfile, teacherProfile]);
+
   // Populate form with existing data when loaded
   useEffect(() => {
     if (user) {
       if (role === 'student' && studentProfile) {
+        console.log('Setting student form values:', {
+          fullName: user.full_name || '',
+          email: user.email || '',
+          registerNumber: studentProfile.register_number || '',
+          rollNumber: studentProfile.roll_number || '',
+          department: studentProfile.department || '',
+          semester: studentProfile.semester || 1,
+        });
+        
         studentForm.reset({
           fullName: user.full_name || '',
           email: user.email || '',
@@ -77,6 +92,14 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
           semester: studentProfile.semester || 1,
         });
       } else if (role === 'teacher' && teacherProfile) {
+        console.log('Setting teacher form values:', {
+          fullName: user.full_name || '',
+          email: user.email || '',
+          employeeId: teacherProfile.employee_id || '',
+          department: teacherProfile.department || '',
+          designation: teacherProfile.designation || '',
+        });
+        
         teacherForm.reset({
           fullName: user.full_name || '',
           email: user.email || '',
@@ -86,13 +109,18 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
         });
       }
     }
-  }, [user, studentProfile, teacherProfile, role]);
+  }, [user, studentProfile, teacherProfile, role, studentForm, teacherForm]);
+
+  const handleSubmit = async (data: StudentProfileValues | TeacherProfileValues) => {
+    console.log('Form submitted with values:', data);
+    await onSave(data);
+  };
 
   return (
     <div className="w-full max-w-xl mx-auto">
       {role === 'student' ? (
         <Form {...studentForm}>
-          <form onSubmit={studentForm.handleSubmit(onSave)} className="space-y-4">
+          <form onSubmit={studentForm.handleSubmit(handleSubmit)} className="space-y-4">
             <FormField
               control={studentForm.control}
               name="fullName"
@@ -199,7 +227,7 @@ const ProfileForm = ({ role, onSave, isLoading }: ProfileFormProps) => {
         </Form>
       ) : (
         <Form {...teacherForm}>
-          <form onSubmit={teacherForm.handleSubmit(onSave)} className="space-y-4">
+          <form onSubmit={teacherForm.handleSubmit(handleSubmit)} className="space-y-4">
             <FormField
               control={teacherForm.control}
               name="fullName"
