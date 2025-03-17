@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/utils/supabase';
@@ -20,6 +20,7 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
   const [timeLeft, setTimeLeft] = useState<number>(5);
   const [generating, setGenerating] = useState<boolean>(false);
   const [active, setActive] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   
   // Generate a cryptographically secure random secret
   const generateSecret = () => {
@@ -37,10 +38,17 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
   };
 
   // Generate new QR code data
-  const generateQRData = async () => {
+  const generateQRData = useCallback(async () => {
+    // Prevent multiple simultaneous generation attempts
+    if (refreshing) {
+      console.log('Already refreshing QR, skipping this request');
+      return;
+    }
+    
     try {
       if (!user) return;
       
+      setRefreshing(true);
       setGenerating(true);
       
       // Get the current session's secret from the database
@@ -74,8 +82,9 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
       toast.error('Failed to generate QR code');
     } finally {
       setGenerating(false);
+      setRefreshing(false);
     }
-  };
+  }, [user, sessionId, classId, refreshing]);
 
   // Start generating QR codes
   const startQRGenerator = async () => {
@@ -152,11 +161,11 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
     };
     
     checkSessionStatus();
-  }, [sessionId]);
+  }, [sessionId, generateQRData]);
 
-  // Timer for QR code refresh
+  // Timer for QR code refresh - FIX: Only set up interval when active
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval: ReturnType<typeof setInterval> | null = null;
     
     if (active) {
       // Set up timer to count down from 5 seconds
@@ -175,7 +184,7 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [active]);
+  }, [active, generateQRData]);
 
   // Display a countdown animation ring around the QR code
   const progressPercentage = useMemo(() => {
@@ -240,10 +249,25 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
         <Button 
           onClick={active ? stopQRGenerator : startQRGenerator}
           className={`w-full ${active ? 'bg-destructive hover:bg-destructive/90' : 'bg-brand-500 hover:bg-brand-600'}`}
-          disabled={generating}
+          disabled={generating || refreshing}
         >
-          {generating ? <LoadingSpinner className="h-4 w-4" /> : (active ? 'Stop Tracking' : 'Start Tracking')}
+          {generating ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
+          {active ? 'Stop Tracking' : 'Start Tracking'}
         </Button>
+        
+        {active && (
+          <Button
+            onClick={() => {
+              setTimeLeft(5);
+              generateQRData();
+            }}
+            variant="outline"
+            className="w-full"
+            disabled={generating || refreshing}
+          >
+            Refresh QR Manually
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

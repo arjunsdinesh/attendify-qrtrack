@@ -63,3 +63,6 @@ export const checkConnection = async (): Promise<boolean> => {
     return false;
   }
 };
+
+// Export a more specific function to check Supabase connection
+export const checkSupabaseConnection = checkConnection;

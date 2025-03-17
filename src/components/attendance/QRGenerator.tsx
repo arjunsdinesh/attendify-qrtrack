@@ -20,6 +20,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [connectionError, setConnectionError] = useState<boolean>(false);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [sessionActive, setSessionActive] = useState<boolean>(true);
+  const [refreshingQR, setRefreshingQR] = useState<boolean>(false);
 
   // Force activate session - Improved with retry mechanism
   const forceActivateSession = useCallback(async () => {
@@ -90,6 +91,12 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
 
   // Generate new QR code data with enhanced error handling and session activation
   const generateQRData = useCallback(async () => {
+    // Prevent multiple simultaneous QR generation attempts
+    if (refreshingQR) {
+      console.log('Already refreshing QR, skipping this request');
+      return;
+    }
+    
     try {
       if (!sessionId) {
         console.error('No sessionId provided to QRGenerator');
@@ -97,6 +104,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         return;
       }
       
+      setRefreshingQR(true);
       setGenerating(true);
       setError(null);
       setConnectionError(false);
@@ -186,14 +194,15 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       }
     } finally {
       setGenerating(false);
+      setRefreshingQR(false);
     }
-  }, [sessionId, timeLeft, connectionError, forceActivateSession]);
+  }, [sessionId, timeLeft, connectionError, forceActivateSession, refreshingQR]);
 
-  // Set up aggressive keep-alive ping for session
+  // Set up aggressive keep-alive ping for session (every 20 seconds instead of 5)
   useEffect(() => {
     let pingInterval: ReturnType<typeof setInterval>;
     
-    // Create a more aggressive ping interval (every 5 seconds)
+    // Create a ping interval (every 20 seconds)
     if (sessionId) {
       console.log('Setting up session keep-alive ping');
       pingInterval = setInterval(async () => {
@@ -225,7 +234,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         } catch (error) {
           console.error('Exception in keep-alive ping:', error);
         }
-      }, 5000); // Every 5 seconds
+      }, 20000); // Every 20 seconds
     }
     
     return () => {
@@ -233,10 +242,15 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     };
   }, [sessionId, forceActivateSession]);
 
-  // Timer for QR code refresh
+  // Timer for QR code refresh - FIX for continuous refreshing
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    
+    // Initial QR code generation
+    generateQRData();
+    
     // Set up timer to count down from 30 seconds
-    const interval = setInterval(() => {
+    interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           // Time to generate a new QR code
@@ -247,13 +261,10 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       });
     }, 1000);
     
-    // Initial QR code generation
-    generateQRData();
-    
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [generateQRData]); // Now correctly depends on memoized generateQRData
+  }, []); // Only run on initial mount, not on every change to generateQRData
 
   // Recovery mechanism for connection errors
   useEffect(() => {
@@ -331,11 +342,16 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         Show this QR code to your students. It will refresh automatically every 30 seconds.
       </p>
       <Button 
-        onClick={() => forceActivateSession()} 
+        onClick={() => {
+          // Manual refresh
+          setTimeLeft(30);
+          generateQRData();
+        }} 
         className="w-full bg-green-600 hover:bg-green-700 mt-2"
-        disabled={generating}
+        disabled={generating || refreshingQR}
       >
-        {generating ? <LoadingSpinner className="h-4 w-4" /> : 'Reactivate Session'}
+        {generating ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
+        Refresh QR Code
       </Button>
       <Button 
         onClick={onEndSession}
