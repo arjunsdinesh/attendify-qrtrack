@@ -179,7 +179,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           date: new Date().toISOString().split('T')[0]
         })
         .select()
-        .maybeSingle();
+        .single();
       
       if (error) {
         console.error('Supabase insert error:', error);

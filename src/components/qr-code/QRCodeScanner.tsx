@@ -17,11 +17,13 @@ const QRCodeScanner = () => {
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [recentlyMarked, setRecentlyMarked] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Reset error when starting or stopping scanning
   useEffect(() => {
     if (scanning) {
       setError(null);
+      setSuccessMessage(null);
     }
   }, [scanning]);
 
@@ -43,6 +45,7 @@ const QRCodeScanner = () => {
       
       setProcessing(true);
       setError(null);
+      setSuccessMessage(null);
       
       console.log('Scanned QR data (raw):', data);
       
@@ -75,6 +78,15 @@ const QRCodeScanner = () => {
       }
       
       console.log('Checking session: ', qrData.sessionId);
+      
+      // Verify that the sessionId is a valid UUID
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidPattern.test(qrData.sessionId)) {
+        console.error('Invalid session ID format:', qrData.sessionId);
+        setError('Invalid QR code. Session ID format is incorrect.');
+        setProcessing(false);
+        return;
+      }
       
       // Check if the session is active
       const { data: sessionData, error: sessionError } = await supabase
@@ -126,6 +138,7 @@ const QRCodeScanner = () => {
       
       if (existingRecord) {
         setRecentlyMarked(true);
+        setSuccessMessage('You have already marked your attendance for this session');
         setTimeout(() => setRecentlyMarked(false), 5000);
         toast.info('You have already marked your attendance for this session');
         setProcessing(false);
@@ -156,6 +169,7 @@ const QRCodeScanner = () => {
       
       // Mark as recently marked to prevent multiple submissions
       setRecentlyMarked(true);
+      setSuccessMessage('Attendance marked successfully!');
       setTimeout(() => setRecentlyMarked(false), 5000);
       
       toast.success('Attendance marked successfully!');
@@ -182,6 +196,7 @@ const QRCodeScanner = () => {
   const toggleScanner = () => {
     setScanning(prev => !prev);
     setError(null);
+    setSuccessMessage(null);
   };
 
   return (
@@ -201,6 +216,12 @@ const QRCodeScanner = () => {
         {error && (
           <Alert className="border-red-200 bg-red-50 text-red-800">
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {successMessage && !error && (
+          <Alert className="border-green-200 bg-green-50 text-green-800">
+            <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
         

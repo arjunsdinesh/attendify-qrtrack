@@ -69,21 +69,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         return;
       }
       
-      const secret = sessionData.qr_secret || '';
-      
-      if (!secret) {
-        console.error('QR secret not found for session');
-        setError('QR secret not found');
-        return;
-      }
-      
       // Create the QR code data with expiration time
       const timestamp = Date.now();
       const expiresAt = timestamp + ((timeLeft + 5) * 1000); 
       
       // Create a simple QR data format that matches what the scanner expects
       const qrData = {
-        sessionId,
+        sessionId: sessionData.id, // Use the verified session ID from the database
         timestamp,
         expiresAt
       };
