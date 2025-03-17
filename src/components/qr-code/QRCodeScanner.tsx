@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { QrCode, X, CheckCircle2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const QRCodeScanner = () => {
   const { user } = useAuth();
@@ -15,6 +16,14 @@ const QRCodeScanner = () => {
   const [processing, setProcessing] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [recentlyMarked, setRecentlyMarked] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset error when starting or stopping scanning
+  useEffect(() => {
+    if (scanning) {
+      setError(null);
+    }
+  }, [scanning]);
 
   // Handle successful QR code scan
   const handleScan = async (result: any) => {
@@ -33,6 +42,7 @@ const QRCodeScanner = () => {
       setLastScanned(data);
       
       setProcessing(true);
+      setError(null);
       
       console.log('Scanned QR data (raw):', data);
       
@@ -43,19 +53,25 @@ const QRCodeScanner = () => {
         console.log('Parsed QR data:', qrData);
       } catch (e) {
         console.error('QR parse error:', e);
-        throw new Error('Invalid QR code format');
+        setError('Invalid QR code format. Please scan a valid attendance QR code.');
+        setProcessing(false);
+        return;
       }
       
       // Check if the QR code contains the required fields
       if (!qrData.sessionId || !qrData.timestamp || !qrData.expiresAt) {
         console.error('QR missing fields:', qrData);
-        throw new Error('Invalid QR code format');
+        setError('Invalid QR code format. Please scan a valid attendance QR code.');
+        setProcessing(false);
+        return;
       }
       
       // Check if the QR code has expired
       const now = Date.now();
       if (qrData.expiresAt && now > qrData.expiresAt) {
-        throw new Error('QR code has expired. Please scan a fresh code.');
+        setError('QR code has expired. Please scan a fresh code.');
+        setProcessing(false);
+        return;
       }
       
       console.log('Checking session: ', qrData.sessionId);
@@ -69,12 +85,16 @@ const QRCodeScanner = () => {
       
       if (sessionError) {
         console.error('Session query error:', sessionError);
-        throw sessionError;
+        setError('Error verifying attendance session. Please try again.');
+        setProcessing(false);
+        return;
       }
       
       if (!sessionData) {
         console.error('Session not found:', qrData.sessionId);
-        throw new Error('Attendance session not found. Please scan a valid QR code.');
+        setError('Attendance session not found. Please scan a valid QR code.');
+        setProcessing(false);
+        return;
       }
       
       console.log('Session data found:', {
@@ -84,7 +104,9 @@ const QRCodeScanner = () => {
       });
       
       if (!sessionData.is_active) {
-        throw new Error('This attendance session is no longer active');
+        setError('This attendance session is no longer active');
+        setProcessing(false);
+        return;
       }
       
       // Check if attendance was already marked for this session
@@ -95,12 +117,18 @@ const QRCodeScanner = () => {
         .eq('student_id', user.id)
         .maybeSingle();
       
-      if (existingError) throw existingError;
+      if (existingError) {
+        console.error('Error checking existing record:', existingError);
+        setError('Error verifying attendance record. Please try again.');
+        setProcessing(false);
+        return;
+      }
       
       if (existingRecord) {
         setRecentlyMarked(true);
         setTimeout(() => setRecentlyMarked(false), 5000);
         toast.info('You have already marked your attendance for this session');
+        setProcessing(false);
         return;
       }
       
@@ -119,7 +147,9 @@ const QRCodeScanner = () => {
       
       if (insertError) {
         console.error('Insert error:', insertError);
-        throw insertError;
+        setError('Failed to record attendance. Please try again.');
+        setProcessing(false);
+        return;
       }
       
       console.log('Attendance recorded successfully');
@@ -135,7 +165,7 @@ const QRCodeScanner = () => {
       
     } catch (error: any) {
       console.error('Error processing QR code:', error);
-      toast.error(error.message || 'Failed to process QR code');
+      setError(error.message || 'Failed to process QR code');
     } finally {
       setProcessing(false);
     }
@@ -144,13 +174,14 @@ const QRCodeScanner = () => {
   // Handle QR scanner errors
   const handleError = (error: any) => {
     console.error('QR scanner error:', error);
-    toast.error('Failed to access camera. Please check permissions.');
+    setError('Failed to access camera. Please check permissions.');
     setScanning(false);
   };
 
   // Toggle scanning state
   const toggleScanner = () => {
     setScanning(prev => !prev);
+    setError(null);
   };
 
   return (
@@ -167,6 +198,12 @@ const QRCodeScanner = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-center space-y-5 p-6">
+        {error && (
+          <Alert className="border-red-200 bg-red-50 text-red-800">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
         {scanning ? (
           <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-inner border border-gray-200">
             <Scanner

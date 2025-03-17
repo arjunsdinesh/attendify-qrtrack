@@ -1,37 +1,28 @@
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
-import { Scanner } from '@yudiel/react-qr-scanner';
-import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import QRCodeScanner from '@/components/qr-code/QRCodeScanner';
-
-interface ClassData {
-  name: string;
-  [key: string]: any;
-}
 
 const ScanQR = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   
   useEffect(() => {
-    if (user && user.role !== 'student') {
+    if (!loading && user && user.role !== 'student') {
       navigate('/');
     }
-  }, [user, navigate]);
+  }, [user, loading, navigate]);
 
-  if (!user) {
+  if (loading || !user) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
+            <LoadingSpinner className="h-8 w-8 mx-auto mb-4" />
             <p>Loading...</p>
           </div>
         </div>

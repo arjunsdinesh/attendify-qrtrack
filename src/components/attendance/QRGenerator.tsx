@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui-components';
 import { supabase } from '@/utils/supabase';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface QRGeneratorProps {
   sessionId: string;
@@ -17,13 +18,6 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [timeLeft, setTimeLeft] = useState<number>(30); // 30 seconds
   const [generating, setGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Create a simple signature for verification
-  const createSignature = (data: any, secret: string) => {
-    const stringData = JSON.stringify(data);
-    // Simple signature (in production, use a proper HMAC)
-    return btoa(stringData + secret).substring(0, 16);
-  };
 
   // Generate new QR code data
   const generateQRData = async () => {
@@ -83,33 +77,25 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         return;
       }
       
-      // Create the QR code data with a longer expiration buffer
+      // Create the QR code data with expiration time
       const timestamp = Date.now();
-      // Add 5 extra seconds to account for network delays and clock differences
       const expiresAt = timestamp + ((timeLeft + 5) * 1000); 
       
-      // Use a very simple QR data format to minimize parsing issues
+      // Create a simple QR data format that matches what the scanner expects
       const qrData = {
         sessionId,
         timestamp,
         expiresAt
       };
       
-      // Generate a signature to verify the QR code hasn't been tampered with
-      const signature = createSignature(qrData, secret);
-      
-      // Include the signature directly in the QR data
-      const finalData = { ...qrData, signature };
-      
-      // Log the QR data for debugging (without the secret)
+      // Log the QR data for debugging
       console.log('Generated QR data:', {
-        sessionId: finalData.sessionId,
-        timestamp: finalData.timestamp,
-        expiresAt: finalData.expiresAt,
-        hasSignature: !!finalData.signature
+        sessionId: qrData.sessionId,
+        timestamp: qrData.timestamp,
+        expiresAt: qrData.expiresAt
       });
       
-      setQrValue(JSON.stringify(finalData));
+      setQrValue(JSON.stringify(qrData));
       
     } catch (error: any) {
       console.error('Error generating QR code:', error);
@@ -144,6 +130,12 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
 
   return (
     <div className="flex flex-col items-center space-y-4">
+      {error && (
+        <Alert className="border-red-200 bg-red-50 text-red-800 w-full">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
       <div className="relative p-2 bg-white rounded-lg shadow-sm border">
         {qrValue && !error ? (
           <div className="w-[200px] h-[200px] flex items-center justify-center">
