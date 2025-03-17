@@ -15,7 +15,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storageKey: 'supabase.auth.token', // Ensure consistent storage key
   },
   realtime: {
-    timeout: 20000, // Increased timeout for better connection stability
+    timeout: 30000, // Increased timeout for better connection stability
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -25,11 +25,17 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Optimized connection checking utility with retry logic
+// Connection checking utility with retry logic
 export const checkConnection = async (): Promise<boolean> => {
   try {
+    console.log('Starting connection check...');
+    
+    // Use a longer timeout for connection check
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => {
+      console.log('Connection check timed out after 8 seconds');
+      controller.abort();
+    }, 8000);
     
     // Use a simple count query to check connection
     const { data, error } = await supabase.from('profiles')
@@ -43,18 +49,31 @@ export const checkConnection = async (): Promise<boolean> => {
       return false;
     }
     
-    console.log('Connection check successful');
+    console.log('Main connection check successful');
     
-    // Also validate attendance_sessions table connectivity
-    const sessionsCheck = await supabase.from('attendance_sessions')
+    // Also verify access to attendance_sessions table
+    const { error: sessionCheckError } = await supabase
+      .from('attendance_sessions')
       .select('count', { count: 'exact', head: true })
       .limit(1);
       
-    if (sessionsCheck.error) {
-      console.error('Sessions table check failed:', sessionsCheck.error);
+    if (sessionCheckError) {
+      console.error('Sessions table access check failed:', sessionCheckError);
       // Still return true since the initial connection worked
     } else {
-      console.log('Sessions table check successful');
+      console.log('Sessions table access check successful');
+    }
+    
+    // Check attendance_records table access as well
+    const { error: recordsCheckError } = await supabase
+      .from('attendance_records')
+      .select('count', { count: 'exact', head: true })
+      .limit(1);
+      
+    if (recordsCheckError) {
+      console.error('Records table access check failed:', recordsCheckError);
+    } else {
+      console.log('Records table access check successful');
     }
     
     return true;

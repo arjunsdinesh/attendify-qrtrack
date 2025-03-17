@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { toast } from 'sonner';
 import QRCode from 'react-qr-code';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface QRCodeGeneratorProps {
   sessionId: string;
@@ -21,6 +21,8 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
   const [generating, setGenerating] = useState<boolean>(false);
   const [active, setActive] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<boolean | null>(null);
   
   // Generate a cryptographically secure random secret
   const generateSecret = () => {
@@ -29,13 +31,44 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
     return Array.from(array, x => x.toString(16)).join('');
   };
 
-  // Create a secure signature for the QR data
-  const createSignature = (data: any, secret: string) => {
-    const stringData = JSON.stringify(data);
-    // In a real app, you would use a proper crypto library to create a HMAC
-    // This is a simplified version for demonstration
-    return btoa(stringData + secret).substring(0, 16);
-  };
+  // Check session status
+  const checkSessionStatus = useCallback(async () => {
+    if (!sessionId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('attendance_sessions')
+        .select('is_active')
+        .eq('id', sessionId)
+        .single();
+      
+      if (error) {
+        console.error('Error checking session status:', error);
+        setSessionStatus(null);
+        return;
+      }
+      
+      setSessionStatus(data?.is_active || false);
+      console.log('Session active status:', data?.is_active);
+      
+      if (!data?.is_active) {
+        // Try to activate it
+        const { error: activateError } = await supabase
+          .from('attendance_sessions')
+          .update({ is_active: true, end_time: null })
+          .eq('id', sessionId);
+        
+        if (activateError) {
+          console.error('Error activating session:', activateError);
+        } else {
+          setSessionStatus(true);
+          console.log('Session activated successfully');
+        }
+      }
+    } catch (error) {
+      console.error('Exception checking session status:', error);
+    }
+  }, [sessionId]);
 
   // Generate new QR code data
   const generateQRData = useCallback(async () => {
@@ -50,41 +83,78 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
       
       setRefreshing(true);
       setGenerating(true);
+      setError(null);
       
-      // Get the current session's secret from the database
+      console.log('Generating QR code for session:', sessionId);
+      
+      // First, ensure the session is active
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('qr_secret')
-        .eq('id', sessionId as any)
+        .select('is_active, qr_secret')
+        .eq('id', sessionId)
         .single();
       
-      if (sessionError) throw sessionError;
+      if (sessionError) {
+        console.error('Error checking session:', sessionError);
+        setError('Error verifying session');
+        setRefreshing(false);
+        setGenerating(false);
+        return;
+      }
       
-      const secret = sessionData?.qr_secret;
+      // Store the session status
+      setSessionStatus(sessionData?.is_active || false);
+      
+      // If session is not active, activate it
+      if (!sessionData.is_active) {
+        console.log('Session is not active, activating...');
+        
+        const { error: activateError } = await supabase
+          .from('attendance_sessions')
+          .update({ is_active: true, end_time: null })
+          .eq('id', sessionId);
+        
+        if (activateError) {
+          console.error('Error activating session:', activateError);
+          setError('Failed to activate session');
+          setRefreshing(false);
+          setGenerating(false);
+          return;
+        }
+        
+        setSessionStatus(true);
+        console.log('Session activated successfully');
+      }
       
       // Create the QR code data
       const timestamp = Date.now();
+      const expiresAt = timestamp + (timeLeft * 1000);
+      
       const qrData = {
         sessionId,
         timestamp,
-        secret: secret?.substring(0, 8), // Only share a part of the secret
+        expiresAt,
+        isActive: true,
         classId
       };
       
-      // Generate a signature to verify the QR code hasn't been tampered with
-      const signature = createSignature(qrData, secret || '');
+      console.log('QR data created:', {
+        sessionId: qrData.sessionId,
+        timestamp: qrData.timestamp,
+        expiresAt: qrData.expiresAt
+      });
       
-      const finalData = { ...qrData, signature };
-      setQrValue(JSON.stringify(finalData));
+      setQrValue(JSON.stringify(qrData));
+      setActive(true);
       
     } catch (error) {
       console.error('Error generating QR code:', error);
-      toast.error('Failed to generate QR code');
+      setError('Failed to generate QR code');
     } finally {
       setGenerating(false);
       setRefreshing(false);
     }
-  }, [user, sessionId, classId, refreshing]);
+  }, [user, sessionId, classId, timeLeft, refreshing]);
 
   // Start generating QR codes
   const startQRGenerator = async () => {
@@ -100,13 +170,17 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
         .update({ 
           qr_secret: secret, 
           is_active: true 
-        } as any)
-        .eq('id', sessionId as any);
+        })
+        .eq('id', sessionId);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error starting attendance tracking:', error);
+        throw error;
+      }
       
       // Generate the first QR code
       await generateQRData();
+      setSessionStatus(true);
       
       toast.success('Attendance tracking started');
     } catch (error) {
@@ -127,11 +201,12 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
         .update({ 
           is_active: false, 
           end_time: new Date().toISOString() 
-        } as any)
-        .eq('id', sessionId as any);
+        })
+        .eq('id', sessionId);
       
       if (error) throw error;
       
+      setSessionStatus(false);
       toast.success('Attendance tracking stopped');
     } catch (error) {
       console.error('Error stopping attendance tracking:', error);
@@ -141,15 +216,17 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
 
   // Check if session is already active when component loads
   useEffect(() => {
-    const checkSessionStatus = async () => {
+    const initialCheck = async () => {
       try {
         const { data, error } = await supabase
           .from('attendance_sessions')
           .select('is_active, qr_secret')
-          .eq('id', sessionId as any)
+          .eq('id', sessionId)
           .single();
         
         if (error) throw error;
+        
+        setSessionStatus(data?.is_active || false);
         
         if (data?.is_active) {
           setActive(true);
@@ -160,14 +237,54 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
       }
     };
     
-    checkSessionStatus();
+    initialCheck();
   }, [sessionId, generateQRData]);
 
-  // Timer for QR code refresh - FIX: Only set up interval when active
+  // Set up session keep-alive ping
+  useEffect(() => {
+    let pingInterval: ReturnType<typeof setInterval> | null = null;
+    
+    if (active && sessionId) {
+      // Set up a ping every 15 seconds to keep the session active
+      pingInterval = setInterval(async () => {
+        try {
+          console.log('Sending session keep-alive ping');
+          
+          const { error: pingError } = await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true })
+            .eq('id', sessionId);
+            
+          if (pingError) {
+            console.error('Error in session keep-alive:', pingError);
+          } else {
+            console.log('Session keep-alive successful');
+          }
+          
+          // Check actual session status every ping
+          checkSessionStatus();
+          
+        } catch (error) {
+          console.error('Exception in session keep-alive:', error);
+        }
+      }, 15000); // Every 15 seconds
+    }
+    
+    return () => {
+      if (pingInterval) clearInterval(pingInterval);
+    };
+  }, [active, sessionId, checkSessionStatus]);
+
+  // Timer for QR code refresh - Carefully control the dependencies
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     
     if (active) {
+      // Generate initial QR code when activated
+      if (!qrValue) {
+        generateQRData();
+      }
+      
       // Set up timer to count down from 5 seconds
       interval = setInterval(() => {
         setTimeLeft((prev) => {
@@ -184,7 +301,7 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [active, generateQRData]);
+  }, [active, generateQRData, qrValue]);
 
   // Display a countdown animation ring around the QR code
   const progressPercentage = useMemo(() => {
@@ -202,6 +319,28 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-center space-y-4">
+        {error && (
+          <Alert className="w-full border-red-200 bg-red-50 text-red-800">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {sessionStatus === false && !error && (
+          <Alert className="w-full border-yellow-200 bg-yellow-50 text-yellow-800">
+            <AlertDescription className="flex justify-between items-center">
+              <span>Session is inactive. Activate to allow students to mark attendance.</span>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={startQRGenerator}
+                disabled={generating}
+              >
+                Activate
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         {active ? (
           <div className="relative">
             <div 
@@ -211,7 +350,7 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
                 padding: '0.5rem'
               }}
             />
-            <div className="bg-white rounded-xl p-2 relative z-10 qr-refresh-animation">
+            <div className="bg-white rounded-xl p-2 relative z-10">
               {qrValue ? (
                 <QRCode 
                   value={qrValue}
@@ -265,6 +404,7 @@ const QRCodeGenerator = ({ sessionId, classId, className }: QRCodeGeneratorProps
             className="w-full"
             disabled={generating || refreshing}
           >
+            {refreshing ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
             Refresh QR Manually
           </Button>
         )}
