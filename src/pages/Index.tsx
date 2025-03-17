@@ -89,7 +89,8 @@ const Index = () => {
   }
 
   if (!user) {
-    const connectionStatus = dbConnected === null ? 'checking' : dbConnected ? 'connected' : 'disconnected';
+    // Only show disconnected status, hide the connected status
+    const connectionStatus = dbConnected === null ? 'checking' : dbConnected ? null : 'disconnected';
     
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
@@ -105,10 +106,10 @@ const Index = () => {
           )}
           
           <Card className="border-2 shadow-lg">
-            <ConnectionStatus status={connectionStatus} />
+            {connectionStatus && <ConnectionStatus status={connectionStatus} />}
             <CardContent className="pt-6">
               <div className="text-center mb-6">
-                <h1 className="text-3xl font-bold mb-2">QR Attendance</h1>
+                <h1 className="text-3xl font-bold mb-2">Attendify</h1>
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
                 {!dbConnected && dbConnected !== null && (
                   <p className="text-destructive mt-2">

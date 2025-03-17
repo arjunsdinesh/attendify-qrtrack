@@ -19,6 +19,7 @@ const AuthForm = () => {
     const checkConnection = async () => {
       try {
         const isConnected = await checkSupabaseConnection();
+        // Only set 'disconnected' status if there's an error, don't show 'connected'
         setConnectionStatus(isConnected ? 'connected' : 'disconnected');
         if (!isConnected) {
           toast.error("Unable to connect to Supabase. Please check your configuration.");
@@ -35,7 +36,8 @@ const AuthForm = () => {
   return (
     <div className="max-w-md w-full mx-auto">
       <Card className="bg-white/95 backdrop-blur-sm border border-border/50 shadow-soft">
-        <ConnectionStatus status={connectionStatus} />
+        {/* Only show ConnectionStatus if disconnected */}
+        {connectionStatus === 'disconnected' && <ConnectionStatus status="disconnected" />}
         
         <Tabs value={authMode} onValueChange={(value) => setAuthMode(value as 'login' | 'register')}>
           <TabsList className="grid w-full grid-cols-2">
