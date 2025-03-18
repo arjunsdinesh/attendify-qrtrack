@@ -33,11 +33,34 @@ const AuthForm = () => {
     checkConnection();
   }, []);
 
+  // Retry connection when disconnected
+  const handleRetryConnection = async () => {
+    setConnectionStatus('checking');
+    try {
+      const isConnected = await checkSupabaseConnection(true); // Force a fresh check
+      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+      if (isConnected) {
+        toast.success("Connection restored successfully!");
+      } else {
+        toast.error("Still unable to connect. Please try again later.");
+      }
+    } catch (error) {
+      setConnectionStatus('disconnected');
+      console.error('Retry connection failed:', error);
+      toast.error("Connection check failed. Please try again later.");
+    }
+  };
+
   return (
     <div className="max-w-md w-full mx-auto">
       <Card className="bg-white/95 backdrop-blur-sm border border-border/50 shadow-soft">
-        {/* Only show ConnectionStatus if disconnected */}
-        {connectionStatus === 'disconnected' && <ConnectionStatus status="disconnected" />}
+        {/* Only show ConnectionStatus if checking or disconnected */}
+        {connectionStatus !== 'connected' && (
+          <ConnectionStatus 
+            status={connectionStatus} 
+            onRetry={connectionStatus === 'disconnected' ? handleRetryConnection : undefined} 
+          />
+        )}
         
         <Tabs value={authMode} onValueChange={(value) => setAuthMode(value as 'login' | 'register')}>
           <TabsList className="grid w-full grid-cols-2">

@@ -1,6 +1,7 @@
 
 import { WifiOff, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
 
 interface ConnectionStatusProps {
   status: 'checking' | 'connected' | 'disconnected';
@@ -8,6 +9,22 @@ interface ConnectionStatusProps {
 }
 
 const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
+  const [retryAttempted, setRetryAttempted] = useState(false);
+  
+  // Reset retry status when connection status changes
+  useEffect(() => {
+    if (status === 'checking') {
+      setRetryAttempted(false);
+    }
+  }, [status]);
+  
+  const handleRetry = () => {
+    setRetryAttempted(true);
+    if (onRetry) {
+      onRetry();
+    }
+  };
+  
   if (status === 'checking') {
     return (
       <div className="bg-amber-50 p-3 rounded-t-lg border-b border-amber-200">
@@ -39,17 +56,31 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
             <p>Database connection error. Please check your Supabase configuration.</p>
             <p className="text-xs mt-1 flex items-center">
               <AlertTriangle className="h-3 w-3 mr-1" />
-              <span>Try refreshing the page or check if Supabase is down.</span>
+              <span>
+                {retryAttempted ? 
+                  "Connection still failed. Try refreshing the page or contact support." :
+                  "Try using the retry button or check if Supabase is down."}
+              </span>
             </p>
             {onRetry && (
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="mt-2 h-7 text-xs border-red-300 hover:bg-red-100"
-                onClick={onRetry}
+                onClick={handleRetry}
+                disabled={status === 'checking'}
               >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Retry Connection
+                {status === 'checking' ? (
+                  <>
+                    <span className="animate-spin mr-1">◯</span>
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Retry Connection
+                  </>
+                )}
               </Button>
             )}
           </div>

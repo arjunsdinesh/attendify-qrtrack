@@ -1,4 +1,3 @@
-
 import { supabase as supabaseClient, checkConnection } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { type PostgrestError } from '@supabase/supabase-js';
@@ -183,34 +182,70 @@ export const getAttendanceRecordsWithStudentDetails = async (sessionId: string) 
   }
 };
 
-// Re-export the connection check from the client for convenience
-export const checkSupabaseConnection = async (): Promise<boolean> => {
+// Enhanced connection check with improved error handling and caching
+let connectionStatus: 'unknown' | 'connected' | 'disconnected' = 'unknown';
+let lastCheckTime = 0;
+const CONNECTION_CACHE_TIME = 30000; // 30 seconds
+
+export const checkSupabaseConnection = async (forceCheck = false): Promise<boolean> => {
   try {
+    const now = Date.now();
+    
+    // Return cached result if we checked recently (except when forced)
+    if (!forceCheck && connectionStatus !== 'unknown' && (now - lastCheckTime) < CONNECTION_CACHE_TIME) {
+      console.log(`Using cached connection status: ${connectionStatus}`);
+      return connectionStatus === 'connected';
+    }
+    
+    console.log('Performing database connection check...');
+    
     // Implement a more robust connection check with retry logic
-    const maxRetries = 3;
+    const maxRetries = 2;
     let retries = 0;
     
     while (retries <= maxRetries) {
       try {
         console.log(`Connection attempt ${retries + 1} of ${maxRetries + 1}`);
-        const isConnected = await checkConnection();
         
-        if (isConnected) {
-          console.log('Supabase connection successful');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          console.log('Connection attempt timed out after 5 seconds');
+        }, 5000);
+        
+        // Simple query to verify connection
+        const { error } = await supabase
+          .from('profiles')
+          .select('count', { count: 'exact', head: true })
+          .limit(1)
+          .abortSignal(controller.signal);
+          
+        clearTimeout(timeoutId);
+        
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // This is usually an auth error, not a connection error
+            console.log('Connected but returned auth error, treating as connected');
+            connectionStatus = 'connected';
+            lastCheckTime = now;
+            return true;
+          }
+          
+          console.warn(`Connection error: ${error.message}`);
+          retries++;
+          
+          if (retries <= maxRetries) {
+            const delay = 1000 * Math.pow(2, retries - 1);
+            console.log(`Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        } else {
+          console.log('Connection successful');
+          connectionStatus = 'connected';
+          lastCheckTime = now;
           return true;
         }
-        
-        // If error is related to connection, try again
-        console.warn(`Connection attempt ${retries + 1} failed`);
-        retries++;
-        
-        if (retries <= maxRetries) {
-          // Wait before retrying with exponential backoff
-          const delay = 1000 * Math.pow(2, retries - 1); // Exponential backoff
-          console.log(`Retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      } catch (innerError) {
+      } catch (innerError: any) {
         console.error(`Connection attempt ${retries + 1} error:`, innerError);
         retries++;
         
@@ -223,9 +258,13 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     }
     
     console.error('All connection attempts failed');
+    connectionStatus = 'disconnected';
+    lastCheckTime = now;
     return false;
   } catch (error) {
     console.error('Supabase connection check failed:', error);
+    connectionStatus = 'disconnected';
+    lastCheckTime = Date.now();
     return false;
   }
 };
