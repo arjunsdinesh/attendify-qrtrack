@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -182,7 +183,7 @@ const QRCodeScanner = () => {
       
       const now = Date.now();
       if (qrData.expiresAt && now > qrData.expiresAt) {
-        setError('QR code has expired. Please scan a fresh code.');
+        setError('QR code has expired. Please ask your teacher to generate a new QR code.');
         setProcessing(false);
         processingRef.current = false;
         return;
@@ -202,15 +203,35 @@ const QRCodeScanner = () => {
       try {
         setActivationInProgress(true);
         
-        const { data: sessionData, error: sessionError } = await supabase
-          .from('attendance_sessions')
-          .select('is_active, class_id')
-          .eq('id', qrData.sessionId)
-          .maybeSingle();
+        // Enhanced session verification with retry logic
+        let sessionData = null;
+        let sessionError = null;
+        
+        for (let attempt = 0; attempt < 3; attempt++) {
+          console.log(`Verifying session (attempt ${attempt + 1})...`);
           
-        if (sessionError) {
-          console.error('Session check error:', sessionError);
-          setError('Error finding attendance session. Please try again.');
+          const { data, error } = await supabase
+            .from('attendance_sessions')
+            .select('is_active, class_id, classes(name)')
+            .eq('id', qrData.sessionId)
+            .maybeSingle();
+            
+          if (error) {
+            console.error(`Session check error (attempt ${attempt + 1}):`, error);
+            sessionError = error;
+            
+            // Add a small delay before retrying
+            if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          } else {
+            console.log(`Session data found (attempt ${attempt + 1}):`, data);
+            sessionData = data;
+            break;
+          }
+        }
+        
+        if (sessionError && !sessionData) {
+          console.error('All attempts to verify session failed:', sessionError);
+          setError('Error finding attendance session. Please try again or ask your teacher to check the system.');
           setProcessing(false);
           processingRef.current = false;
           setActivationInProgress(false);
@@ -218,7 +239,7 @@ const QRCodeScanner = () => {
         }
         
         if (!sessionData) {
-          console.error('Session not found:', qrData.sessionId);
+          console.error('Session not found after multiple attempts:', qrData.sessionId);
           setError('Attendance session not found. Please ask your teacher to check the QR code.');
           setProcessing(false);
           processingRef.current = false;
@@ -235,16 +256,28 @@ const QRCodeScanner = () => {
           return;
         }
         
+        // If we reach here, session is verified
+        console.log('Session verified successfully:', sessionData);
         setSessionVerified(true);
         
+        // Now mark attendance with retry logic
         const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
         
         if (attendanceSuccess) {
           console.log('Attendance successfully marked!');
           setRecentlyMarked(true);
-          setSuccessMessage('Attendance marked successfully!');
+          
+          // Get class name from the session data
+          let classInfo = '';
+          if (sessionData.classes) {
+            if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
+              classInfo = ` for ${sessionData.classes.name}`;
+            }
+          }
+          
+          setSuccessMessage(`Attendance marked successfully${classInfo}!`);
           setTimeout(() => setRecentlyMarked(false), 5000);
-          toast.success('Attendance marked successfully!');
+          toast.success(`Attendance marked successfully${classInfo}!`);
           setRetryCount(0);
           setScanning(false);
         } else {
