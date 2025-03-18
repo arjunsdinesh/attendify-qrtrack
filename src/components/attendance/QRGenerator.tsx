@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
@@ -20,20 +21,32 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [connectionError, setConnectionError] = useState<boolean>(false);
   const [sessionActive, setSessionActive] = useState<boolean>(true);
   const [refreshingQR, setRefreshingQR] = useState<boolean>(false);
+  const [lastActivationTime, setLastActivationTime] = useState<number>(Date.now());
 
-  // Force activate session - simplified
+  // Enhanced session activation with robust error handling
   const forceActivateSession = useCallback(async () => {
     try {
+      // Only try to activate if it's been more than 5 seconds since last activation
+      // to prevent too many requests
+      const now = Date.now();
+      if (now - lastActivationTime < 5000) {
+        console.log('Skipping activation, too soon since last attempt');
+        return sessionActive;
+      }
+      
       console.log('Force activating session:', sessionId);
       setGenerating(true);
       
-      const { error } = await supabase
+      // Use update with RETURNING to get confirmation
+      const { data, error } = await supabase
         .from('attendance_sessions')
         .update({ 
           is_active: true,
           end_time: null 
         })
-        .eq('id', sessionId);
+        .eq('id', sessionId)
+        .select('is_active')
+        .single();
         
       if (error) {
         console.error('Error activating session:', error);
@@ -42,8 +55,18 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         return false;
       }
       
-      console.log('Session activated successfully');
+      // Verify the update was successful
+      if (!data || !data.is_active) {
+        console.error('Session activation did not work, data returned:', data);
+        setSessionActive(false);
+        setError('Failed to activate session - server did not confirm activation');
+        return false;
+      }
+      
+      console.log('Session activated successfully, confirmation:', data);
+      setLastActivationTime(now);
       setSessionActive(true);
+      setError(null);
       return true;
       
     } catch (error) {
@@ -53,9 +76,9 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     } finally {
       setGenerating(false);
     }
-  }, [sessionId]);
+  }, [sessionId, sessionActive, lastActivationTime]);
 
-  // Generate new QR code data with simplified approach
+  // Generate new QR code data with enhanced session activation
   const generateQRData = useCallback(async () => {
     // Prevent multiple simultaneous QR generation attempts
     if (refreshingQR) {
@@ -77,19 +100,40 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       console.log('Generating QR code for session:', sessionId);
       
-      // Always force activate the session before generating QR
-      await forceActivateSession();
+      // First, verify the session exists and activate it if needed
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('attendance_sessions')
+        .select('is_active')
+        .eq('id', sessionId)
+        .single();
+        
+      if (sessionError) {
+        console.error('Error checking session:', sessionError);
+        // Try to force activate anyway as a fallback
+        const activated = await forceActivateSession();
+        
+        if (!activated) {
+          setConnectionError(true);
+          throw new Error('Could not verify session status');
+        }
+      } else if (!sessionData.is_active) {
+        console.log('Session exists but is not active, activating...');
+        await forceActivateSession();
+      } else {
+        console.log('Session already active:', sessionData);
+        setSessionActive(true);
+      }
       
       // Create the QR code data with expiration time
       const timestamp = Date.now();
       const expiresAt = timestamp + ((timeLeft + 5) * 1000); 
       
-      // Create a simple QR data format that matches what the scanner expects
+      // Create a QR data format that matches what the scanner expects
       const qrData = {
         sessionId,
         timestamp,
         expiresAt,
-        isActive: true // Explicitly include activation status
+        isActive: true
       };
       
       console.log('Generated QR data:', {
@@ -103,7 +147,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
     } catch (error: any) {
       console.error('Error generating QR code:', error);
-      setError('Failed to generate QR code');
+      setError('Failed to generate QR code: ' + (error.message || 'Unknown error'));
       toast.error('Error generating QR code');
     } finally {
       setGenerating(false);
@@ -115,31 +159,41 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   useEffect(() => {
     let pingInterval: ReturnType<typeof setInterval>;
     
-    // Create a ping interval (every 15 seconds)
     if (sessionId) {
       console.log('Setting up session keep-alive ping');
+      
+      // Create a ping interval (every 10 seconds)
       pingInterval = setInterval(async () => {
         try {
           console.log('Sending keep-alive ping for session:', sessionId);
           
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from('attendance_sessions')
             .update({ 
               is_active: true, 
               end_time: null 
             })
-            .eq('id', sessionId);
+            .eq('id', sessionId)
+            .select('is_active')
+            .single();
             
           if (error) {
             console.error('Error in keep-alive ping:', error);
+            // Try to force activate on error
             await forceActivateSession();
-          } else {
+          } else if (data && data.is_active) {
+            console.log('Keep-alive ping successful, session confirmed active');
             setSessionActive(true);
+            setError(null);
+          } else {
+            console.warn('Keep-alive ping successful but session not active');
+            await forceActivateSession();
           }
         } catch (error) {
           console.error('Exception in keep-alive ping:', error);
+          // Don't set error here to avoid too many error notifications
         }
-      }, 15000); // Every 15 seconds
+      }, 10000); // Every 10 seconds
     }
     
     return () => {
@@ -147,7 +201,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     };
   }, [sessionId, forceActivateSession]);
 
-  // Timer for QR code refresh - fixed to avoid continuous refreshing
+  // Initial setup and QR code refresh timer
   useEffect(() => {
     // Initial QR code generation
     generateQRData();
@@ -164,10 +218,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       });
     }, 1000);
     
+    // Immediately activate the session when component mounts
+    forceActivateSession();
+    
     return () => {
       clearInterval(interval);
     };
-  }, []);  // Empty dependency array means this only runs once on mount
+  }, [generateQRData, forceActivateSession]);  
 
   return (
     <div className="flex flex-col items-center space-y-4">

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -203,9 +202,9 @@ const QRCodeScanner = () => {
       try {
         setActivationInProgress(true);
         
-        // Enhanced session verification with retry logic
         let sessionData = null;
         let sessionError = null;
+        let sessionActiveConfirmed = false;
         
         for (let attempt = 0; attempt < 3; attempt++) {
           console.log(`Verifying session (attempt ${attempt + 1})...`);
@@ -220,12 +219,37 @@ const QRCodeScanner = () => {
             console.error(`Session check error (attempt ${attempt + 1}):`, error);
             sessionError = error;
             
-            // Add a small delay before retrying
             if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
           } else {
             console.log(`Session data found (attempt ${attempt + 1}):`, data);
             sessionData = data;
-            break;
+            
+            if (data && data.is_active) {
+              sessionActiveConfirmed = true;
+              break;
+            } else if (data && !data.is_active) {
+              console.log(`Session found but not active, attempting to activate it (attempt ${attempt + 1})...`);
+              
+              const { data: updateData, error: updateError } = await supabase
+                .from('attendance_sessions')
+                .update({ is_active: true, end_time: null })
+                .eq('id', qrData.sessionId)
+                .select('is_active')
+                .single();
+                
+              if (updateError) {
+                console.error(`Error activating session (attempt ${attempt + 1}):`, updateError);
+              } else if (updateData && updateData.is_active) {
+                console.log(`Session successfully activated (attempt ${attempt + 1})`);
+                sessionData = { ...data, is_active: true };
+                sessionActiveConfirmed = true;
+                break;
+              }
+            }
+            
+            if (attempt < 2) {
+              await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+            }
           }
         }
         
@@ -247,27 +271,38 @@ const QRCodeScanner = () => {
           return;
         }
         
-        if (!sessionData.is_active) {
-          console.warn('Session exists but is not active:', qrData.sessionId);
-          setError('This attendance session is no longer active. Please ask your teacher to activate it.');
-          setProcessing(false);
-          processingRef.current = false;
-          setActivationInProgress(false);
-          return;
+        if (!sessionActiveConfirmed) {
+          console.warn('Could not confirm session is active after multiple attempts:', qrData.sessionId);
+          
+          const { data: finalActivation, error: finalError } = await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true, end_time: null })
+            .eq('id', qrData.sessionId)
+            .select('is_active')
+            .single();
+            
+          if (finalError || !finalActivation?.is_active) {
+            console.error('Failed to activate session in final attempt:', finalError || 'No confirmation');
+            setError('This attendance session could not be activated. Please ask your teacher to check the system.');
+            setProcessing(false);
+            processingRef.current = false;
+            setActivationInProgress(false);
+            return;
+          } else {
+            console.log('Session activated in final attempt');
+            sessionActiveConfirmed = true;
+          }
         }
         
-        // If we reach here, session is verified
         console.log('Session verified successfully:', sessionData);
         setSessionVerified(true);
         
-        // Now mark attendance with retry logic
         const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
         
         if (attendanceSuccess) {
           console.log('Attendance successfully marked!');
           setRecentlyMarked(true);
           
-          // Get class name from the session data
           let classInfo = '';
           if (sessionData.classes) {
             if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
