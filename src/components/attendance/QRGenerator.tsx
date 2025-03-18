@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
@@ -22,6 +21,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [sessionActive, setSessionActive] = useState<boolean>(true);
   const [refreshingQR, setRefreshingQR] = useState<boolean>(false);
   const [lastActivationTime, setLastActivationTime] = useState<number>(Date.now());
+  const [lastQRGeneration, setLastQRGeneration] = useState<number>(Date.now());
 
   // Enhanced session activation with robust error handling
   const forceActivateSession = useCallback(async () => {
@@ -80,6 +80,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
 
   // Generate new QR code data with enhanced session activation
   const generateQRData = useCallback(async () => {
+    // Enforce minimum time between QR generations (25 seconds)
+    const now = Date.now();
+    if (now - lastQRGeneration < 25000 && qrValue) {
+      console.log('QR refresh throttled, too soon since last generation');
+      return;
+    }
+    
     // Prevent multiple simultaneous QR generation attempts
     if (refreshingQR) {
       console.log('Already refreshing QR, skipping this request');
@@ -144,6 +151,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       });
       
       setQrValue(JSON.stringify(qrData));
+      setLastQRGeneration(now);
       
     } catch (error: any) {
       console.error('Error generating QR code:', error);
@@ -153,7 +161,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       setGenerating(false);
       setRefreshingQR(false);
     }
-  }, [sessionId, timeLeft, forceActivateSession, refreshingQR]);
+  }, [sessionId, timeLeft, forceActivateSession, refreshingQR, qrValue, lastQRGeneration]);
 
   // Set up keep-alive ping for session
   useEffect(() => {
@@ -201,16 +209,17 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     };
   }, [sessionId, forceActivateSession]);
 
-  // Initial setup and QR code refresh timer
+  // Initial setup and QR code refresh timer 
   useEffect(() => {
     // Initial QR code generation
     generateQRData();
     
-    // Set up timer to count down from 30 seconds
+    // Set up timer to count down from 30 seconds exactly
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
+        // Only refresh QR when timer hits exactly 0
         if (prev <= 1) {
-          // Time to generate a new QR code
+          console.log('Timer hit 0, generating new QR code');
           generateQRData();
           return 30; // Reset to 30 seconds
         }
@@ -224,7 +233,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     return () => {
       clearInterval(interval);
     };
-  }, [generateQRData, forceActivateSession]);  
+  }, [generateQRData, forceActivateSession]);
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -289,7 +298,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       </p>
       <Button 
         onClick={() => {
-          // Manual refresh
+          // Manual refresh - full reset of timer
           setTimeLeft(30);
           generateQRData();
         }} 
