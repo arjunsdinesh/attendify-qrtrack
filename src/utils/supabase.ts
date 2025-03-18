@@ -120,6 +120,69 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   }
 };
 
+// Helper function to get a student's detailed profile
+export const getStudentProfile = async (studentId: string): Promise<{profile: Profile, studentProfile: StudentProfile} | null> => {
+  try {
+    // Get the base profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', studentId)
+      .maybeSingle();
+      
+    if (profileError) throw profileError;
+    
+    // Get the student-specific profile
+    const { data: studentData, error: studentError } = await supabase
+      .from('student_profiles')
+      .select('*')
+      .eq('id', studentId)
+      .maybeSingle();
+      
+    if (studentError) throw studentError;
+    
+    if (!profileData || !studentData) {
+      return null;
+    }
+    
+    return {
+      profile: profileData as unknown as Profile,
+      studentProfile: studentData as unknown as StudentProfile
+    };
+  } catch (error) {
+    console.error('Failed to get student profile:', error);
+    handleSupabaseError(error as PostgrestError, 'Failed to get student profile');
+    return null;
+  }
+};
+
+// Function to get attendance records with student details
+export const getAttendanceRecordsWithStudentDetails = async (sessionId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('attendance_records')
+      .select(`
+        id,
+        timestamp,
+        student:student_id(
+          id,
+          full_name,
+          student_profiles(*)
+        )
+      `)
+      .eq('session_id', sessionId)
+      .order('timestamp', { ascending: true });
+      
+    if (error) throw error;
+    
+    return data;
+  } catch (error) {
+    console.error('Failed to get attendance records:', error);
+    handleSupabaseError(error as PostgrestError, 'Failed to get attendance records');
+    return [];
+  }
+};
+
 // Re-export the connection check from the client for convenience
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {

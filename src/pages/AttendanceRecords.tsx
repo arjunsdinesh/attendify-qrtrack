@@ -10,7 +10,6 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const AttendanceRecords = () => {
   const navigate = useNavigate();
@@ -19,6 +18,7 @@ const AttendanceRecords = () => {
   const [sessions, setSessions] = useState<any[]>([]);
   const [selectedSession, setSelectedSession] = useState<string>('');
   const [records, setRecords] = useState<any[]>([]);
+  const [sessionDetails, setSessionDetails] = useState<any>(null);
   
   // Redirect if not authenticated or not a teacher
   useEffect(() => {
@@ -42,9 +42,10 @@ const AttendanceRecords = () => {
             id,
             start_time,
             end_time,
+            date,
             is_active,
             class_id,
-            classes(name)
+            classes(name, course_code)
           `)
           .eq('created_by', user.id)
           .order('start_time', { ascending: false });
@@ -55,21 +56,25 @@ const AttendanceRecords = () => {
         const formattedSessions = data?.map(session => {
           // Extract class name safely
           let className = 'Unknown Class';
+          let courseCode = '';
           
           // Handle case where classes might be returned as an array or as an object
           const classData = session.classes;
           if (classData) {
             if (Array.isArray(classData) && classData.length > 0) {
               className = classData[0]?.name || 'Unknown Class';
+              courseCode = classData[0]?.course_code || '';
             } else if (typeof classData === 'object' && classData !== null) {
-              // Need to check if the property 'name' exists on this object
-              className = 'name' in classData ? (classData.name as string) : 'Unknown Class';
+              className = classData.name || 'Unknown Class';
+              courseCode = classData.course_code || '';
             }
           }
           
           return {
             id: session.id,
             class_name: className,
+            course_code: courseCode,
+            date: session.date,
             start_time: session.start_time,
             end_time: session.end_time,
             is_active: session.is_active
@@ -96,18 +101,35 @@ const AttendanceRecords = () => {
       setLoading(true);
       console.log('Loading records for session:', selectedSession);
       
+      // First get the session details to show class info
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('attendance_sessions')
+        .select(`
+          *,
+          classes(name, course_code, department)
+        `)
+        .eq('id', selectedSession)
+        .single();
+      
+      if (sessionError) throw sessionError;
+      
+      setSessionDetails(sessionData);
+      
+      // Then get the attendance records with detailed student info
       const { data, error } = await supabase
         .from('attendance_records')
         .select(`
           id,
           timestamp,
-          profiles:student_id (
+          student:student_id(
             id,
             full_name,
-            student_profiles (
+            email,
+            student_profiles(
               register_number,
               roll_number,
-              department
+              department,
+              semester
             )
           )
         `)
@@ -135,6 +157,7 @@ const AttendanceRecords = () => {
       loadRecords();
     } else {
       setRecords([]);
+      setSessionDetails(null);
     }
   }, [selectedSession]);
 
@@ -143,12 +166,18 @@ const AttendanceRecords = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Format just the date part
+  const formatDateOnly = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
   if (!user) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <p>Loading...</p>
+            <LoadingSpinner className="h-8 w-8" />
+            <p className="mt-2">Loading...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -160,7 +189,7 @@ const AttendanceRecords = () => {
       <div className="max-w-4xl mx-auto">
         <Button 
           variant="outline" 
-          onClick={() => navigate('/teacher')} 
+          onClick={() => navigate('/teacher-dashboard')} 
           className="mb-4"
         >
           ← Back to Dashboard
@@ -187,7 +216,7 @@ const AttendanceRecords = () => {
                   <SelectContent>
                     {sessions.map((session) => (
                       <SelectItem key={session.id} value={session.id}>
-                        {session.class_name} - {formatDate(session.start_time)}
+                        {session.class_name} ({session.course_code}) - {formatDateOnly(session.date)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -204,31 +233,61 @@ const AttendanceRecords = () => {
         ) : records.length > 0 ? (
           <Card>
             <CardContent className="p-6">
+              {sessionDetails && (
+                <div className="mb-6 bg-muted/40 p-4 rounded-md">
+                  <h3 className="text-lg font-medium mb-2">Session Details</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="font-medium">Class:</span> {sessionDetails.classes?.name}
+                    </div>
+                    <div>
+                      <span className="font-medium">Course Code:</span> {sessionDetails.classes?.course_code}
+                    </div>
+                    <div>
+                      <span className="font-medium">Department:</span> {sessionDetails.classes?.department}
+                    </div>
+                    <div>
+                      <span className="font-medium">Date:</span> {formatDateOnly(sessionDetails.date)}
+                    </div>
+                    <div>
+                      <span className="font-medium">Start Time:</span> {formatDate(sessionDetails.start_time)}
+                    </div>
+                    <div>
+                      <span className="font-medium">Status:</span> {sessionDetails.is_active ? 'Active' : 'Ended'}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <h3 className="text-lg font-medium mb-4">
-                {sessions.find(s => s.id === selectedSession)?.class_name} - 
-                {formatDate(sessions.find(s => s.id === selectedSession)?.start_time)}
+                Student Attendance ({records.length} students)
               </h3>
               
-              <div className="bg-muted p-2 rounded-md grid grid-cols-12 font-medium">
+              <div className="bg-muted p-2 rounded-md grid grid-cols-12 font-medium text-sm">
                 <div className="col-span-1">No.</div>
                 <div className="col-span-3">Name</div>
-                <div className="col-span-2">Reg. Number</div>
-                <div className="col-span-2">Roll Number</div>
+                <div className="col-span-2">Register No.</div>
+                <div className="col-span-2">Roll No.</div>
                 <div className="col-span-2">Department</div>
-                <div className="col-span-2">Time</div>
+                <div className="col-span-2">Attendance Time</div>
               </div>
               
-              <div className="space-y-2 mt-2">
-                {records.map((record, index) => (
-                  <div key={record.id} className="grid grid-cols-12 p-2 hover:bg-muted/50 rounded-md">
-                    <div className="col-span-1">{index + 1}</div>
-                    <div className="col-span-3">{record.profiles?.full_name || '-'}</div>
-                    <div className="col-span-2">{record.profiles?.student_profiles?.[0]?.register_number || '-'}</div>
-                    <div className="col-span-2">{record.profiles?.student_profiles?.[0]?.roll_number || '-'}</div>
-                    <div className="col-span-2">{record.profiles?.student_profiles?.[0]?.department || '-'}</div>
-                    <div className="col-span-2">{formatDate(record.timestamp)}</div>
-                  </div>
-                ))}
+              <div className="space-y-1 mt-1">
+                {records.map((record, index) => {
+                  const student = record.student;
+                  const studentProfile = student?.student_profiles?.[0] || {};
+                  
+                  return (
+                    <div key={record.id} className="grid grid-cols-12 p-2 hover:bg-muted/50 rounded-md text-sm">
+                      <div className="col-span-1">{index + 1}</div>
+                      <div className="col-span-3">{student?.full_name || '-'}</div>
+                      <div className="col-span-2">{studentProfile?.register_number || '-'}</div>
+                      <div className="col-span-2">{studentProfile?.roll_number || '-'}</div>
+                      <div className="col-span-2">{studentProfile?.department || '-'}</div>
+                      <div className="col-span-2">{formatDate(record.timestamp)}</div>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

@@ -33,19 +33,18 @@ const Profile = () => {
       
       console.log('Saving profile with data:', formData);
       
-      // Base profile data - including email which is required
+      // Base profile data - email is required
       const profileData = {
         id: user.id,
-        email: user.email, // Add the required email field
         full_name: formData.fullName,
-        role: user.role,
         updated_at: new Date().toISOString()
       };
       
       // Update the base profile
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert(profileData);
+        .update(profileData)
+        .eq('id', user.id);
       
       if (profileError) {
         console.error('Error updating base profile:', profileError);
@@ -56,13 +55,13 @@ const Profile = () => {
       if (user.role === 'student') {
         const { error: studentError } = await supabase
           .from('student_profiles')
-          .upsert({
-            id: user.id,
+          .update({
             register_number: formData.registerNumber,
             roll_number: formData.rollNumber,
             department: formData.department,
             semester: formData.semester
-          });
+          })
+          .eq('id', user.id);
         
         if (studentError) {
           console.error('Error updating student profile:', studentError);
@@ -71,12 +70,12 @@ const Profile = () => {
       } else if (user.role === 'teacher') {
         const { error: teacherError } = await supabase
           .from('teacher_profiles')
-          .upsert({
-            id: user.id,
+          .update({
             employee_id: formData.employeeId,
             department: formData.department,
             designation: formData.designation
-          });
+          })
+          .eq('id', user.id);
         
         if (teacherError) {
           console.error('Error updating teacher profile:', teacherError);
@@ -111,7 +110,7 @@ const Profile = () => {
       <div className="max-w-md mx-auto">
         <Button 
           variant="outline" 
-          onClick={() => navigate(user?.role === 'teacher' ? '/teacher' : '/student')} 
+          onClick={() => navigate(user?.role === 'teacher' ? '/teacher-dashboard' : '/student-dashboard')} 
           className="mb-4"
         >
           ← Back to Dashboard
