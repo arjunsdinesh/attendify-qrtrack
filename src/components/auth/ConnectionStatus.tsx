@@ -68,19 +68,9 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
                 size="sm" 
                 className="mt-2 h-7 text-xs border-red-300 hover:bg-red-100"
                 onClick={handleRetry}
-                disabled={status === 'checking'}
               >
-                {status === 'checking' ? (
-                  <>
-                    <span className="animate-spin mr-1">◯</span>
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    Retry Connection
-                  </>
-                )}
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Retry Connection
               </Button>
             )}
           </div>
