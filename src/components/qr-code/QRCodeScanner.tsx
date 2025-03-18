@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,6 @@ const QRCodeScanner = () => {
   const [sessionVerified, setSessionVerified] = useState(false);
   const processingRef = useRef<boolean>(false);
   
-  // Reset error when starting or stopping scanning
   useEffect(() => {
     if (scanning) {
       setError(null);
@@ -31,23 +29,39 @@ const QRCodeScanner = () => {
     }
   }, [scanning]);
 
-  // Direct attendance marking function without complex session activation
   const markAttendance = useCallback(async (sessionId: string, qrData: any) => {
-    if (!user || !sessionId) return false;
+    if (!user || !sessionId) {
+      console.error('Cannot mark attendance: Missing user or session ID');
+      return false;
+    }
     
     try {
-      console.log('Directly marking attendance for session:', sessionId);
+      console.log('Marking attendance for session:', sessionId, 'student:', user.id);
       
-      // Check for existing attendance record
-      const { data: existingRecord, error: existingError } = await supabase
-        .from('attendance_records')
-        .select('id')
-        .eq('session_id', sessionId)
-        .eq('student_id', user.id)
-        .maybeSingle();
+      let existingRecord = null;
+      let existingError = null;
       
-      if (existingError) {
-        console.error('Error checking existing record:', existingError);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, error } = await supabase
+          .from('attendance_records')
+          .select('id')
+          .eq('session_id', sessionId)
+          .eq('student_id', user.id)
+          .maybeSingle();
+        
+        if (!error) {
+          existingRecord = data;
+          break;
+        } else {
+          console.warn(`Error checking existing record (attempt ${attempt + 1}):`, error);
+          existingError = error;
+          if (attempt < 1) await new Promise(r => setTimeout(r, 500));
+        }
+      }
+      
+      if (existingError && !existingRecord) {
+        console.error('Final error checking existing record:', existingError);
+        toast.error('Error checking attendance records');
         return false;
       }
       
@@ -56,49 +70,88 @@ const QRCodeScanner = () => {
         return true; // Already marked is a success case
       }
       
-      console.log('No existing record found, recording new attendance');
+      console.log('No existing record found, creating new attendance record');
       
-      // Insert new attendance record
-      const { data: newRecord, error: insertError } = await supabase
-        .from('attendance_records')
-        .insert({
-          session_id: sessionId,
-          student_id: user.id,
-          timestamp: new Date().toISOString()
-        })
-        .select('id')
-        .single();
+      let insertSuccess = false;
+      let finalError = null;
       
-      if (insertError) {
-        console.error('Insert error:', insertError);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const timestamp = new Date().toISOString();
+          
+          const { data, error } = await supabase
+            .from('attendance_records')
+            .insert({
+              session_id: sessionId,
+              student_id: user.id,
+              timestamp
+            })
+            .select('id')
+            .single();
+          
+          if (error) {
+            console.warn(`Insert error (attempt ${attempt + 1}):`, error);
+            finalError = error;
+            
+            if (error.code === '23505') {
+              console.log('Duplicate record detected, attendance already recorded');
+              insertSuccess = true;
+              break;
+            }
+            
+            if (attempt < 2) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+          } else {
+            console.log('Attendance record successfully created:', data);
+            insertSuccess = true;
+            break;
+          }
+        } catch (error) {
+          console.error(`Exception during insert (attempt ${attempt + 1}):`, error);
+          finalError = error;
+          if (attempt < 2) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+        }
+      }
+      
+      if (!insertSuccess) {
+        console.error('All attempts to record attendance failed:', finalError);
         return false;
       }
       
-      console.log('Attendance record successfully created:', newRecord);
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('attendance_records')
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('student_id', user.id)
+        .maybeSingle();
+      
+      if (verifyError) {
+        console.warn('Verification check error:', verifyError);
+      } else if (!verifyData) {
+        console.warn('Verification failed: Record not found after insert');
+      } else {
+        console.log('Attendance record verified:', verifyData);
+      }
+      
       return true;
     } catch (error) {
-      console.error('Error marking attendance:', error);
+      console.error('Unexpected error marking attendance:', error);
       return false;
     }
   }, [user]);
 
-  // Handle successful QR code scan with simpler logic
   const handleScan = async (result: any) => {
     try {
       if (!result || !result.length || !result[0]?.rawValue) {
-        return; // No valid scan result
+        return;
       }
       
-      // Extract the data from the scanned QR code
       const data = result[0]?.rawValue || '';
       
       if (!user || processingRef.current || recentlyMarked) return;
       
-      // Prevent multiple quick scans
       if (lastScanned === data) return;
       setLastScanned(data);
       
-      // Set processing state with ref to prevent multiple simultaneous executions
       setProcessing(true);
       processingRef.current = true;
       setError(null);
@@ -107,7 +160,6 @@ const QRCodeScanner = () => {
       
       console.log('Scanned QR data (raw):', data);
       
-      // Parse the QR code data
       let qrData;
       try {
         qrData = JSON.parse(data);
@@ -120,7 +172,6 @@ const QRCodeScanner = () => {
         return;
       }
       
-      // Check if the QR code contains the required fields
       if (!qrData.sessionId || !qrData.timestamp) {
         console.error('QR missing required fields:', qrData);
         setError('Invalid QR code format. Please scan a valid attendance QR code.');
@@ -129,7 +180,6 @@ const QRCodeScanner = () => {
         return;
       }
       
-      // Check if the QR code has expired
       const now = Date.now();
       if (qrData.expiresAt && now > qrData.expiresAt) {
         setError('QR code has expired. Please scan a fresh code.');
@@ -140,7 +190,6 @@ const QRCodeScanner = () => {
       
       console.log('Processing session: ', qrData.sessionId);
       
-      // Verify that the sessionId is a valid UUID
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidPattern.test(qrData.sessionId)) {
         console.error('Invalid session ID format:', qrData.sessionId);
@@ -150,11 +199,9 @@ const QRCodeScanner = () => {
         return;
       }
 
-      // First check if the session exists 
       try {
         setActivationInProgress(true);
         
-        // Check if session exists
         const { data: sessionData, error: sessionError } = await supabase
           .from('attendance_sessions')
           .select('is_active, class_id')
@@ -179,10 +226,17 @@ const QRCodeScanner = () => {
           return;
         }
         
-        // Session exists, try to mark attendance directly
+        if (!sessionData.is_active) {
+          console.warn('Session exists but is not active:', qrData.sessionId);
+          setError('This attendance session is no longer active. Please ask your teacher to activate it.');
+          setProcessing(false);
+          processingRef.current = false;
+          setActivationInProgress(false);
+          return;
+        }
+        
         setSessionVerified(true);
         
-        // Directly mark attendance
         const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
         
         if (attendanceSuccess) {
@@ -214,20 +268,17 @@ const QRCodeScanner = () => {
     }
   };
 
-  // Handle QR scanner errors
   const handleError = (error: any) => {
     console.error('QR scanner error:', error);
     setError('Failed to access camera. Please check permissions.');
     setScanning(false);
   };
 
-  // Toggle scanning state
   const toggleScanner = () => {
     setScanning(prev => !prev);
     setError(null);
     setSuccessMessage(null);
     setSessionVerified(false);
-    // Reset retry count when starting a new scan
     if (!scanning) {
       setRetryCount(0);
     }
@@ -257,8 +308,8 @@ const QRCodeScanner = () => {
                 onClick={() => {
                   setError(null);
                   setRetryCount(0);
-                  if (scanning) toggleScanner(); // Turn off scanner
-                  setTimeout(() => toggleScanner(), 500); // Turn on scanner
+                  if (scanning) toggleScanner();
+                  setTimeout(() => toggleScanner(), 500);
                 }}
                 className="ml-2 flex items-center gap-1"
               >
