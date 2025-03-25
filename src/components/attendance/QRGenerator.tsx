@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [refreshingQR, setRefreshingQR] = useState<boolean>(false);
   const [lastActivationTime, setLastActivationTime] = useState<number>(Date.now());
   const [lastQRGeneration, setLastQRGeneration] = useState<number>(Date.now());
+  const [sessionStatusCheck, setSessionStatusCheck] = useState<boolean>(false);
 
   // Enhanced session activation with robust error handling
   const forceActivateSession = useCallback(async () => {
@@ -36,6 +38,23 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       console.log('Force activating session:', sessionId);
       setGenerating(true);
+      setSessionStatusCheck(true);
+      
+      // First check if session exists
+      const { data: checkData, error: checkError } = await supabase
+        .from('attendance_sessions')
+        .select('id, is_active')
+        .eq('id', sessionId)
+        .maybeSingle();
+        
+      if (checkError) {
+        console.error('Error checking session existence:', checkError);
+      } else if (!checkData) {
+        console.error('Session does not exist:', sessionId);
+        setSessionActive(false);
+        setError('Session not found. Please create a new session.');
+        return false;
+      }
       
       // Use update with RETURNING to get confirmation
       const { data, error } = await supabase
@@ -75,6 +94,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       return false;
     } finally {
       setGenerating(false);
+      setSessionStatusCheck(false);
     }
   }, [sessionId, sessionActive, lastActivationTime]);
 
@@ -110,9 +130,9 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       // First, verify the session exists and activate it if needed
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('is_active')
+        .select('is_active, class_id')
         .eq('id', sessionId)
-        .single();
+        .maybeSingle();
         
       if (sessionError) {
         console.error('Error checking session:', sessionError);
@@ -123,6 +143,10 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
           setConnectionError(true);
           throw new Error('Could not verify session status');
         }
+      } else if (!sessionData) {
+        console.error('Session not found:', sessionId);
+        setError('Session not found. Please create a new session.');
+        return;
       } else if (!sessionData.is_active) {
         console.log('Session exists but is not active, activating...');
         await forceActivateSession();
@@ -170,9 +194,14 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     if (sessionId) {
       console.log('Setting up session keep-alive ping');
       
-      // Create a ping interval (every 10 seconds)
+      // Create a ping interval (every 5 seconds)
       pingInterval = setInterval(async () => {
         try {
+          if (sessionStatusCheck) {
+            console.log('Skipping keep-alive ping, session status check in progress');
+            return;
+          }
+          
           console.log('Sending keep-alive ping for session:', sessionId);
           
           const { data, error } = await supabase
@@ -201,13 +230,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
           console.error('Exception in keep-alive ping:', error);
           // Don't set error here to avoid too many error notifications
         }
-      }, 10000); // Every 10 seconds
+      }, 5000); // Every 5 seconds
     }
     
     return () => {
       if (pingInterval) clearInterval(pingInterval);
     };
-  }, [sessionId, forceActivateSession]);
+  }, [sessionId, forceActivateSession, sessionStatusCheck]);
 
   // Initial setup and QR code refresh timer 
   useEffect(() => {

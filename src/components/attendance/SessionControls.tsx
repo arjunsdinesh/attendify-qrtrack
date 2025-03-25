@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -83,21 +82,21 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
             end_time: null 
           } as any)
           .eq('id', data.id as any);
-          
-        if (activateError) {
-          console.error('Error ensuring session activation:', activateError);
-        } else {
-          console.log('Session activation reinforced');
-        }
+        
+      if (activateError) {
+        console.error('Error ensuring session activation:', activateError);
       } else {
-        console.log('No active sessions found');
+        console.log('Session activation reinforced');
       }
-    } catch (error: any) {
-      console.error('Error checking active sessions:', error);
-    } finally {
-      setCheckingActiveSession(false);
+    } else {
+      console.log('No active sessions found');
     }
-  };
+  } catch (error: any) {
+    console.error('Error checking active sessions:', error);
+  } finally {
+    setCheckingActiveSession(false);
+  }
+};
 
   // Check for an active session when component mounts
   useEffect(() => {

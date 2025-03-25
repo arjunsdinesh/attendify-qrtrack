@@ -200,7 +200,7 @@ export const checkSupabaseConnection = async (forceCheck = false): Promise<boole
     console.log('Performing database connection check...');
     
     // Implement a more robust connection check with retry logic
-    const maxRetries = 2;
+    const maxRetries = 3;
     let retries = 0;
     
     while (retries <= maxRetries) {
