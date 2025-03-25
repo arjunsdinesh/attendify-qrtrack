@@ -89,7 +89,7 @@ export const isAuthenticated = async () => {
   }
 };
 
-// Helper function to get the current user's profile
+// Helper function to get the current user's profile with improved error handling
 export const getCurrentUserProfile = async (): Promise<Profile | null> => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -116,6 +116,61 @@ export const getCurrentUserProfile = async (): Promise<Profile | null> => {
     console.error('Failed to get current user profile:', error);
     handleSupabaseError(error as PostgrestError, 'Failed to get current user profile');
     return null;
+  }
+};
+
+// Helper function to check if attendance session exists and is active
+export const checkAttendanceSession = async (sessionId: string): Promise<{exists: boolean, isActive: boolean}> => {
+  try {
+    if (!sessionId) {
+      console.error('No session ID provided to checkAttendanceSession');
+      return { exists: false, isActive: false };
+    }
+    
+    const { data, error } = await supabase
+      .from('attendance_sessions')
+      .select('is_active')
+      .eq('id', sessionId)
+      .maybeSingle();
+      
+    if (error) {
+      console.error('Error checking attendance session:', error);
+      return { exists: false, isActive: false };
+    }
+    
+    if (!data) {
+      console.log('Attendance session not found:', sessionId);
+      return { exists: false, isActive: false };
+    }
+    
+    return { exists: true, isActive: !!data.is_active };
+  } catch (error) {
+    console.error('Exception in checkAttendanceSession:', error);
+    return { exists: false, isActive: false };
+  }
+};
+
+// Helper function to activate an attendance session
+export const activateAttendanceSession = async (sessionId: string): Promise<boolean> => {
+  try {
+    if (!sessionId) return false;
+    
+    const { data, error } = await supabase
+      .from('attendance_sessions')
+      .update({ is_active: true, end_time: null })
+      .eq('id', sessionId)
+      .select('is_active')
+      .single();
+      
+    if (error) {
+      console.error('Error activating attendance session:', error);
+      return false;
+    }
+    
+    return !!data?.is_active;
+  } catch (error) {
+    console.error('Exception in activateAttendanceSession:', error);
+    return false;
   }
 };
 

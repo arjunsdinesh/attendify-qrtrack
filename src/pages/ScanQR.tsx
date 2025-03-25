@@ -31,7 +31,7 @@ const ScanQR = () => {
   const checkConnection = useCallback(async () => {
     try {
       setIsCheckingConnection(true);
-      const isConnected = await checkSupabaseConnection();
+      const isConnected = await checkSupabaseConnection(true); // Force fresh check
       setConnectionStatus(isConnected);
       
       if (!isConnected) {

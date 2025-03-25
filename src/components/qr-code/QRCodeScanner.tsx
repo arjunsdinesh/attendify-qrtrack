@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,29 +38,15 @@ const QRCodeScanner = () => {
     try {
       console.log('Marking attendance for session:', sessionId, 'student:', user.id);
       
-      let existingRecord = null;
-      let existingError = null;
+      const { data: existingRecord, error: checkError } = await supabase
+        .from('attendance_records')
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('student_id', user.id)
+        .maybeSingle();
       
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const { data, error } = await supabase
-          .from('attendance_records')
-          .select('id')
-          .eq('session_id', sessionId)
-          .eq('student_id', user.id)
-          .maybeSingle();
-        
-        if (!error) {
-          existingRecord = data;
-          break;
-        } else {
-          console.warn(`Error checking existing record (attempt ${attempt + 1}):`, error);
-          existingError = error;
-          if (attempt < 1) await new Promise(r => setTimeout(r, 500));
-        }
-      }
-      
-      if (existingError && !existingRecord) {
-        console.error('Final error checking existing record:', existingError);
+      if (checkError) {
+        console.error('Error checking existing record:', checkError);
         toast.error('Error checking attendance records');
         return false;
       }
@@ -73,50 +58,31 @@ const QRCodeScanner = () => {
       
       console.log('No existing record found, creating new attendance record');
       
-      let insertSuccess = false;
-      let finalError = null;
+      const timestamp = new Date().toISOString();
       
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const timestamp = new Date().toISOString();
-          
-          const { data, error } = await supabase
-            .from('attendance_records')
-            .insert({
-              session_id: sessionId,
-              student_id: user.id,
-              timestamp
-            })
-            .select('id')
-            .single();
-          
-          if (error) {
-            console.warn(`Insert error (attempt ${attempt + 1}):`, error);
-            finalError = error;
-            
-            if (error.code === '23505') {
-              console.log('Duplicate record detected, attendance already recorded');
-              insertSuccess = true;
-              break;
-            }
-            
-            if (attempt < 2) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-          } else {
-            console.log('Attendance record successfully created:', data);
-            insertSuccess = true;
-            break;
-          }
-        } catch (error) {
-          console.error(`Exception during insert (attempt ${attempt + 1}):`, error);
-          finalError = error;
-          if (attempt < 2) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .insert({
+          session_id: sessionId,
+          student_id: user.id,
+          timestamp
+        })
+        .select('id')
+        .single();
+      
+      if (error) {
+        console.error('Error creating attendance record:', error);
+        
+        if (error.code === '23505') {
+          console.log('Duplicate record detected, attendance already recorded');
+          return true;
         }
-      }
-      
-      if (!insertSuccess) {
-        console.error('All attempts to record attendance failed:', finalError);
+        
+        toast.error('Failed to record attendance');
         return false;
       }
+      
+      console.log('Attendance record successfully created:', data);
       
       const { data: verifyData, error: verifyError } = await supabase
         .from('attendance_records')
@@ -203,129 +169,53 @@ const QRCodeScanner = () => {
       try {
         setActivationInProgress(true);
         
-        let sessionData = null;
-        let sessionError = null;
-        let sessionActiveConfirmed = false;
+        console.log('Verifying session...');
         
-        // More aggressive session verification with multiple retries
-        for (let attempt = 0; attempt < 5; attempt++) {
-          console.log(`Verifying session (attempt ${attempt + 1})...`);
+        const { data: sessionData, error: sessionError } = await supabase
+          .from('attendance_sessions')
+          .select('is_active, class_id, classes(name)')
+          .eq('id', qrData.sessionId)
+          .maybeSingle();
           
-          try {
-            const { data, error } = await supabase
-              .from('attendance_sessions')
-              .select('is_active, class_id, classes(name)')
-              .eq('id', qrData.sessionId)
-              .maybeSingle();
-              
-            if (error) {
-              console.error(`Session check error (attempt ${attempt + 1}):`, error);
-              sessionError = error;
-              
-              // Use exponential backoff for retries
-              if (attempt < 4) {
-                const delay = 300 * Math.pow(1.5, attempt);
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(r => setTimeout(r, delay));
-              }
-            } else if (!data) {
-              console.error(`Session not found (attempt ${attempt + 1})`);
-              
-              if (attempt < 4) {
-                const delay = 300 * Math.pow(1.5, attempt);
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(r => setTimeout(r, delay));
-              }
-            } else {
-              console.log(`Session data found (attempt ${attempt + 1}):`, data);
-              sessionData = data;
-              
-              if (data.is_active) {
-                sessionActiveConfirmed = true;
-                break;
-              } else {
-                console.log(`Session found but not active, attempting to activate it (attempt ${attempt + 1})...`);
-                
-                try {
-                  const { data: updateData, error: updateError } = await supabase
-                    .from('attendance_sessions')
-                    .update({ is_active: true, end_time: null })
-                    .eq('id', qrData.sessionId)
-                    .select('is_active')
-                    .single();
-                    
-                  if (updateError) {
-                    console.error(`Error activating session (attempt ${attempt + 1}):`, updateError);
-                  } else if (updateData && updateData.is_active) {
-                    console.log(`Session successfully activated (attempt ${attempt + 1})`);
-                    sessionData = { ...data, is_active: true };
-                    sessionActiveConfirmed = true;
-                    break;
-                  }
-                } catch (activationError) {
-                  console.error(`Error in activation attempt ${attempt + 1}:`, activationError);
-                }
-              }
-              
-              if (attempt < 4) {
-                const delay = 300 * Math.pow(1.5, attempt);
-                console.log(`Retrying after activation attempt in ${delay}ms...`);
-                await new Promise(r => setTimeout(r, delay));
-              }
-            }
-          } catch (attemptError) {
-            console.error(`Exception in session verification attempt ${attempt + 1}:`, attemptError);
-            if (attempt < 4) {
-              const delay = 300 * Math.pow(1.5, attempt);
-              await new Promise(r => setTimeout(r, delay));
-            }
-          }
-        }
-        
-        if (!sessionData) {
-          console.error('Session not found after multiple attempts:', qrData.sessionId);
-          setError('Attendance session not found. Please ask your teacher to check the QR code or create a new session.');
+        if (sessionError) {
+          console.error('Error checking session:', sessionError);
+          setError('Error verifying session. Please try again.');
           setProcessing(false);
           processingRef.current = false;
           setActivationInProgress(false);
           return;
         }
         
-        if (!sessionActiveConfirmed) {
-          console.warn('Could not confirm session is active after multiple attempts:', qrData.sessionId);
+        if (!sessionData) {
+          console.error('Session not found:', qrData.sessionId);
+          setError('Attendance session not found. Please ask your teacher to check the QR code.');
+          setProcessing(false);
+          processingRef.current = false;
+          setActivationInProgress(false);
+          return;
+        }
+        
+        console.log('Session found:', sessionData);
+        
+        if (!sessionData.is_active) {
+          console.log('Session is not active, attempting to activate it...');
           
-          // Final activation attempt with longer timeout
-          try {
-            const { data: finalActivation, error: finalError } = await supabase
-              .from('attendance_sessions')
-              .update({ is_active: true, end_time: null })
-              .eq('id', qrData.sessionId)
-              .select('is_active')
-              .single();
-              
-            if (finalError || !finalActivation?.is_active) {
-              console.error('Failed to activate session in final attempt:', finalError || 'No confirmation');
-              setError('This attendance session could not be activated. Please ask your teacher to restart the session.');
-              setProcessing(false);
-              processingRef.current = false;
-              setActivationInProgress(false);
-              return;
-            } else {
-              console.log('Session activated in final attempt');
-              sessionActiveConfirmed = true;
-            }
-          } catch (finalError) {
-            console.error('Exception in final activation attempt:', finalError);
-            setError('Could not activate the session. Please ask your teacher to restart the session.');
-            setProcessing(false);
-            processingRef.current = false;
-            setActivationInProgress(false);
-            return;
+          const { data: activateData, error: activateError } = await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true, end_time: null })
+            .eq('id', qrData.sessionId)
+            .select('is_active')
+            .single();
+            
+          if (activateError) {
+            console.error('Error activating session:', activateError);
+          } else {
+            console.log('Session activation result:', activateData);
           }
         }
         
-        console.log('Session verified successfully:', sessionData);
         setSessionVerified(true);
+        console.log('Session verified successfully');
         
         const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
         
