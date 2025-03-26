@@ -186,10 +186,13 @@ const AttendanceRecords = () => {
         // Log the structure to debug
         console.log('Record student data:', record.student);
         
+        // Fix: Access the student object directly, not as an array
+        const studentData = record.student as unknown;
+        
         return {
           id: record.id,
           timestamp: record.timestamp,
-          student: record.student as StudentData // Cast directly to StudentData
+          student: studentData as StudentData
         };
       });
       
