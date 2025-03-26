@@ -1,20 +1,27 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Import the values from the working Supabase client configuration
+const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-if (!supabaseUrl) {
-  console.error('VITE_SUPABASE_URL is not defined in .env');
-  throw new Error('Supabase URL is required');
-}
-
-if (!supabaseAnonKey) {
-  console.error('VITE_SUPABASE_ANON_KEY is not defined in .env');
-  throw new Error('Supabase Anon Key is required');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create the Supabase client with the hardcoded values
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  realtime: {
+    timeout: 60000,
+  },
+  global: {
+    fetch: (...args) => fetch(...args),
+  },
+  db: {
+    schema: 'public'
+  }
+});
 
 // Type definitions needed for the application
 export interface Profile {

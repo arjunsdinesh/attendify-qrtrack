@@ -2,167 +2,147 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useAuth } from '@/context/AuthContext';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { format, parseISO } from 'date-fns';
+import { AlertCircle, Calendar, Clock, Users } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui-components';
-
-interface SessionClass {
-  name: string;
-  course_code: string;
-  department?: string;
-}
-
-interface SessionData {
-  id: string;
-  class_name: string;
-  course_code: string;
-  date: string;
-  start_time: string;
-  end_time?: string;
-  is_active: boolean;
-}
-
-interface SessionDetails {
-  id: string;
-  date: string;
-  start_time: string;
-  end_time?: string;
-  is_active: boolean;
-  classes: SessionClass;
-}
-
-interface StudentProfile {
-  register_number?: string;
-  roll_number?: string;
-  department?: string;
-  semester?: number;
-}
-
-interface StudentData {
-  id: string;
-  full_name: string;
-  email: string;
-  student_profiles: StudentProfile[];
-}
-
-interface AttendanceRecord {
-  id: string;
-  timestamp: string;
-  student: StudentData;
-}
+import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const AttendanceRecords = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState<SessionData[]>([]);
-  const [selectedSession, setSelectedSession] = useState<string>('');
+  const { user, loading } = useAuth();
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
-  
-  // Redirect if not authenticated or not a teacher
-  useEffect(() => {
-    if (!user || user.role !== 'teacher') {
-      navigate('/');
-      return;
-    }
-  }, [user, navigate]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load teacher's sessions
+  // Define interfaces for type safety
+  interface SessionClass {
+    name: string;
+    course_code: string;
+  }
+  
+  interface SessionDetails {
+    id: string;
+    date: string;
+    start_time: string;
+    end_time: string | null;
+    is_active: boolean;
+    classes: SessionClass;
+  }
+  
+  interface StudentProfile {
+    register_number?: string;
+    roll_number?: string;
+    department?: string;
+    semester?: number;
+  }
+  
+  interface StudentData {
+    id: string;
+    full_name: string;
+    email: string;
+    student_profiles: StudentProfile[];
+  }
+  
+  interface AttendanceRecord {
+    id: string;
+    timestamp: string;
+    student: StudentData;
+  }
+  
   useEffect(() => {
-    const fetchSessions = async () => {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        
-        const { data, error } = await supabase
-          .from('attendance_sessions')
-          .select(`
-            id,
-            start_time,
-            end_time,
-            date,
-            is_active,
-            class_id,
-            classes(name, course_code)
-          `)
-          .eq('created_by', user.id)
-          .order('start_time', { ascending: false });
-        
-        if (error) throw error;
-        
-        // Format the sessions data for display
-        const formattedSessions = data?.map(session => {
-          // Extract class name safely
-          let className = 'Unknown Class';
-          let courseCode = '';
-          
-          // Handle case where classes might be returned as an object
-          const classData = session.classes;
-          if (classData) {
-            if (typeof classData === 'object' && classData !== null) {
-              className = classData.name || 'Unknown Class';
-              courseCode = classData.course_code || '';
-            }
-          }
-          
-          return {
-            id: session.id,
-            class_name: className,
-            course_code: courseCode,
-            date: session.date,
-            start_time: session.start_time,
-            end_time: session.end_time,
-            is_active: session.is_active
-          };
-        }) || [];
-        
-        setSessions(formattedSessions);
-      } catch (error: any) {
-        console.error('Error fetching sessions:', error);
-        toast.error('Failed to load sessions');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
+    // Redirect if not authenticated or not a teacher
+    if (!loading && (!user || user.role !== 'teacher')) {
+      toast.error('Only teachers can view attendance records');
+      navigate('/');
+    }
+  }, [user, loading, navigate]);
+  
+  useEffect(() => {
     fetchSessions();
   }, [user]);
-
-  // Load attendance records for the selected session
-  const loadRecords = async () => {
-    if (!selectedSession) return;
+  
+  const fetchSessions = async () => {
+    if (!user) return;
     
     try {
-      setLoading(true);
-      console.log('Loading records for session:', selectedSession);
+      setLoadingSessions(true);
+      setError(null);
       
-      // First get the session details to show class info
+      const { data, error } = await supabase
+        .from('attendance_sessions')
+        .select(`
+          id,
+          date,
+          start_time,
+          end_time,
+          is_active,
+          classes:class_id(name, course_code)
+        `)
+        .eq('created_by', user.id)
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: false });
+        
+      if (error) throw error;
+      
+      console.log('Fetched sessions:', data);
+      setSessions(data || []);
+    } catch (error: any) {
+      console.error('Error fetching sessions:', error);
+      setError('Failed to load attendance sessions');
+      toast.error('Failed to load sessions');
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+  
+  const fetchSessionRecords = async (sessionId: string) => {
+    if (!sessionId) return;
+    
+    try {
+      setLoadingRecords(true);
+      setError(null);
+      setSelectedSession(sessionId);
+      
+      // First get the session details
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
         .select(`
-          *,
-          classes(name, course_code, department)
+          id,
+          date,
+          start_time,
+          end_time,
+          is_active,
+          classes:class_id(name, course_code)
         `)
-        .eq('id', selectedSession)
+        .eq('id', sessionId)
         .single();
       
       if (sessionError) throw sessionError;
       
       if (sessionData && sessionData.classes) {
+        // Ensure we're correctly accessing the class details
+        const classDetails = sessionData.classes as SessionClass;
+        
         setSessionDetails({
           id: sessionData.id,
           date: sessionData.date,
           start_time: sessionData.start_time,
           end_time: sessionData.end_time,
           is_active: sessionData.is_active,
-          classes: sessionData.classes as SessionClass
+          classes: {
+            name: classDetails.name,
+            course_code: classDetails.course_code
+          }
         });
       }
       
@@ -184,12 +164,18 @@ const AttendanceRecords = () => {
             )
           )
         `)
-        .eq('session_id', selectedSession)
+        .eq('session_id', sessionId)
         .order('timestamp', { ascending: true });
-      
+        
       if (error) {
-        console.error('Error fetching attendance records:', error);
+        console.error('Error fetching records:', error);
         throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        setRecords([]);
+        toast.info('No attendance records found for this session');
+        return;
       }
       
       console.log('Fetched records:', data);
@@ -199,10 +185,10 @@ const AttendanceRecords = () => {
         id: record.id,
         timestamp: record.timestamp,
         student: {
-          id: record.student.id,
-          full_name: record.student.full_name,
-          email: record.student.email,
-          student_profiles: record.student.student_profiles
+          id: record.student[0].id,
+          full_name: record.student[0].full_name,
+          email: record.student[0].email,
+          student_profiles: record.student[0].student_profiles
         }
       })) || [];
       
@@ -210,38 +196,20 @@ const AttendanceRecords = () => {
     } catch (error: any) {
       console.error('Error fetching attendance records:', error);
       toast.error('Failed to load attendance records');
+      setError('Failed to load attendance records: ' + error.message);
     } finally {
-      setLoading(false);
+      setLoadingRecords(false);
     }
   };
 
-  // Load records when a session is selected
-  useEffect(() => {
-    if (selectedSession) {
-      loadRecords();
-    } else {
-      setRecords([]);
-      setSessionDetails(null);
-    }
-  }, [selectedSession]);
-
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
-
-  // Format just the date part
-  const formatDateOnly = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  if (!user) {
+  // Show loading or redirect if not a teacher
+  if (loading || !user) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <LoadingSpinner className="h-8 w-8" />
-            <p className="mt-2">Loading...</p>
+            <LoadingSpinner className="h-8 w-8 mx-auto" />
+            <p className="mt-4">Loading...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -250,116 +218,142 @@ const AttendanceRecords = () => {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto">
-        <Button 
-          variant="outline" 
-          onClick={() => navigate('/teacher-dashboard')} 
-          className="mb-4"
-        >
-          ← Back to Dashboard
-        </Button>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Attendance Records</h1>
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/teacher')} 
+          >
+            ← Back to Dashboard
+          </Button>
+        </div>
         
-        <Card className="w-full mb-6">
-          <CardHeader>
-            <CardTitle>Attendance Records</CardTitle>
-            <CardDescription>
-              View attendance records for your class sessions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="session">Select Session</Label>
-                <Select
-                  value={selectedSession}
-                  onValueChange={setSelectedSession}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a session" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sessions.map((session) => (
-                      <SelectItem key={session.id} value={session.id}>
-                        {session.class_name} ({session.course_code}) - {formatDateOnly(session.date)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         
-        {loading && selectedSession ? (
-          <div className="flex justify-center p-8">
-            <LoadingSpinner className="h-8 w-8" />
-          </div>
-        ) : records.length > 0 ? (
-          <Card>
-            <CardContent className="p-6">
-              {sessionDetails && (
-                <div className="mb-6 bg-muted/40 p-4 rounded-md">
-                  <h3 className="text-lg font-medium mb-2">Session Details</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="font-medium">Class:</span> {sessionDetails.classes?.name}
-                    </div>
-                    <div>
-                      <span className="font-medium">Course Code:</span> {sessionDetails.classes?.course_code}
-                    </div>
-                    <div>
-                      <span className="font-medium">Department:</span> {sessionDetails.classes?.department}
-                    </div>
-                    <div>
-                      <span className="font-medium">Date:</span> {formatDateOnly(sessionDetails.date)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Start Time:</span> {formatDate(sessionDetails.start_time)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Status:</span> {sessionDetails.is_active ? 'Active' : 'Ended'}
-                    </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle>Sessions</CardTitle>
+                <CardDescription>Select a session to view attendance</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingSessions ? (
+                  <div className="flex justify-center p-4">
+                    <LoadingSpinner className="h-6 w-6" />
                   </div>
-                </div>
-              )}
-              
-              <h3 className="text-lg font-medium mb-4">
-                Student Attendance ({records.length} students)
-              </h3>
-              
-              <div className="bg-muted p-2 rounded-md grid grid-cols-12 font-medium text-sm">
-                <div className="col-span-1">No.</div>
-                <div className="col-span-3">Name</div>
-                <div className="col-span-2">Register No.</div>
-                <div className="col-span-2">Roll No.</div>
-                <div className="col-span-2">Department</div>
-                <div className="col-span-2">Attendance Time</div>
-              </div>
-              
-              <div className="space-y-1 mt-1">
-                {records.map((record, index) => {
-                  const student = record.student;
-                  const studentProfile = student?.student_profiles?.[0] || {};
-                  
-                  return (
-                    <div key={record.id} className="grid grid-cols-12 p-2 hover:bg-muted/50 rounded-md text-sm">
-                      <div className="col-span-1">{index + 1}</div>
-                      <div className="col-span-3">{student?.full_name || '-'}</div>
-                      <div className="col-span-2">{studentProfile?.register_number || '-'}</div>
-                      <div className="col-span-2">{studentProfile?.roll_number || '-'}</div>
-                      <div className="col-span-2">{studentProfile?.department || '-'}</div>
-                      <div className="col-span-2">{formatDate(record.timestamp)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        ) : selectedSession ? (
-          <div className="text-center p-8 bg-muted/50 rounded-lg">
-            <p className="text-muted-foreground">No attendance records found for this session.</p>
+                ) : sessions.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">
+                    No sessions found. Create a session first.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {sessions.map((session) => (
+                      <Button
+                        key={session.id}
+                        variant={selectedSession === session.id ? "default" : "outline"}
+                        className="w-full justify-start text-left h-auto py-3"
+                        onClick={() => fetchSessionRecords(session.id)}
+                      >
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">
+                            {session.classes.name} ({session.classes.course_code})
+                          </span>
+                          <span className="text-xs text-muted-foreground flex items-center mt-1">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {format(parseISO(session.date), 'dd MMM yyyy')}
+                          </span>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        ) : null}
+          
+          <div className="md:col-span-2">
+            <Card>
+              <CardHeader>
+                {sessionDetails ? (
+                  <>
+                    <CardTitle>{sessionDetails.classes.name}</CardTitle>
+                    <CardDescription className="space-y-1">
+                      <div className="flex items-center text-muted-foreground">
+                        <Calendar className="h-4 w-4 mr-1" />
+                        {format(parseISO(sessionDetails.date), 'dd MMMM yyyy')}
+                      </div>
+                      <div className="flex items-center text-muted-foreground">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {format(parseISO(sessionDetails.start_time), 'h:mm a')}
+                        {sessionDetails.end_time && (
+                          <> - {format(parseISO(sessionDetails.end_time), 'h:mm a')}</>
+                        )}
+                      </div>
+                      <div className="flex items-center text-muted-foreground">
+                        <Users className="h-4 w-4 mr-1" />
+                        {records.length} students attended
+                      </div>
+                    </CardDescription>
+                  </>
+                ) : (
+                  <>
+                    <CardTitle>Attendance Records</CardTitle>
+                    <CardDescription>
+                      Select a session to view attendance details
+                    </CardDescription>
+                  </>
+                )}
+              </CardHeader>
+              <CardContent>
+                {loadingRecords ? (
+                  <div className="flex justify-center p-8">
+                    <LoadingSpinner className="h-8 w-8" />
+                  </div>
+                ) : !selectedSession ? (
+                  <div className="text-center p-8 text-muted-foreground">
+                    Select a session from the left to view attendance records
+                  </div>
+                ) : records.length === 0 ? (
+                  <div className="text-center p-8 text-muted-foreground">
+                    No attendance records for this session
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student Name</TableHead>
+                        <TableHead>Register Number</TableHead>
+                        <TableHead>Time</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {records.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-medium">
+                            {record.student.full_name}
+                          </TableCell>
+                          <TableCell>
+                            {record.student.student_profiles[0]?.register_number || '-'}
+                          </TableCell>
+                          <TableCell>
+                            {format(parseISO(record.timestamp), 'h:mm a')}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );
