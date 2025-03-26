@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -15,8 +16,34 @@ if (!supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Type definitions needed for the application
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'student' | 'teacher';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StudentProfile {
+  id: string;
+  register_number?: string;
+  roll_number?: string;
+  department?: string;
+  semester?: number;
+  class_id?: string;
+}
+
+export interface TeacherProfile {
+  id: string;
+  employee_id?: string;
+  department?: string;
+  designation?: string;
+}
+
 // Add timeout to the connection check
-export const checkSupabaseConnection = async (): Promise<boolean> => {
+export const checkSupabaseConnection = async (forceCheck = false): Promise<boolean> => {
   try {
     console.log('Performing database connection check...');
     

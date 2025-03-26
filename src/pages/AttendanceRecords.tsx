@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,14 +10,57 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { LoadingSpinner } from '@/components/ui-components';
 
+interface SessionClass {
+  name: string;
+  course_code: string;
+  department?: string;
+}
+
+interface SessionData {
+  id: string;
+  class_name: string;
+  course_code: string;
+  date: string;
+  start_time: string;
+  end_time?: string;
+  is_active: boolean;
+}
+
+interface SessionDetails {
+  id: string;
+  date: string;
+  start_time: string;
+  end_time?: string;
+  is_active: boolean;
+  classes: SessionClass;
+}
+
+interface StudentData {
+  id: string;
+  full_name: string;
+  email: string;
+  student_profiles: {
+    register_number?: string;
+    roll_number?: string;
+    department?: string;
+    semester?: number;
+  }[];
+}
+
+interface AttendanceRecord {
+  id: string;
+  timestamp: string;
+  student: StudentData;
+}
+
 const AttendanceRecords = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<SessionData[]>([]);
   const [selectedSession, setSelectedSession] = useState<string>('');
-  const [records, setRecords] = useState<any[]>([]);
-  const [sessionDetails, setSessionDetails] = useState<any>(null);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   
   // Redirect if not authenticated or not a teacher
   useEffect(() => {
@@ -58,13 +100,10 @@ const AttendanceRecords = () => {
           let className = 'Unknown Class';
           let courseCode = '';
           
-          // Handle case where classes might be returned as an array or as an object
+          // Handle case where classes might be returned as an object
           const classData = session.classes;
           if (classData) {
-            if (Array.isArray(classData) && classData.length > 0) {
-              className = classData[0]?.name || 'Unknown Class';
-              courseCode = classData[0]?.course_code || '';
-            } else if (typeof classData === 'object' && classData !== null) {
+            if (typeof classData === 'object' && classData !== null) {
               className = classData.name || 'Unknown Class';
               courseCode = classData.course_code || '';
             }

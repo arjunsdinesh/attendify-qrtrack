@@ -1,3 +1,4 @@
+
 import { useEffect, memo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,8 @@ const ScanQR = () => {
   const checkConnection = useCallback(async () => {
     try {
       setIsCheckingConnection(true);
-      const isConnected = await checkSupabaseConnection(true);
+      // Remove the parameter since we've updated the function signature
+      const isConnected = await checkSupabaseConnection();
       setConnectionStatus(isConnected);
       
       if (!isConnected) {

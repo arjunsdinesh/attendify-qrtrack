@@ -37,7 +37,8 @@ const AuthForm = () => {
   const handleRetryConnection = async () => {
     setConnectionStatus('checking');
     try {
-      const isConnected = await checkSupabaseConnection(true); // Force a fresh check
+      // Remove the parameter since we've updated the function signature
+      const isConnected = await checkSupabaseConnection();
       setConnectionStatus(isConnected ? 'connected' : 'disconnected');
       if (isConnected) {
         toast.success("Connection restored successfully!");
