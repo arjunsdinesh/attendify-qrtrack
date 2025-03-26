@@ -5,16 +5,17 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-// Create the Supabase client with improved configuration
+// Enhanced Supabase client configuration for better connection stability
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: 'supabase.auth.token', // Consistent storage key
+    storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 30000, // Reduced timeout for faster failure detection
+    timeout: 60000, // Increased timeout for better stability
+    heartbeatIntervalMs: 5000, // Faster heartbeat to prevent connection drops
   },
   global: {
     headers: {
@@ -52,19 +53,20 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Improved connection check with better error handling
+// Improved connection check with more robust error handling and timeout
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('Performing database connection check...');
     
-    // Simple health check query with abort controller for timeout
+    // Use AbortController for timeout handling
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 10 seconds');
+      console.log('Connection check timed out after 15 seconds');
       controller.abort();
-    }, 10000); // 10 second timeout
+    }, 15000); // Increased to 15 seconds for more reliable checking
     
     try {
+      // Try a simple query first to check database access
       const { error } = await supabase.from('profiles')
         .select('count', { count: 'exact', head: true })
         .abortSignal(controller.signal);
@@ -73,7 +75,19 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       
       if (error) {
         console.error('Database connection check failed:', error.message);
-        return false;
+        
+        // Try a second simple query as fallback
+        const { error: secondError } = await supabase.from('attendance_sessions')
+          .select('count', { count: 'exact', head: true })
+          .limit(1);
+          
+        if (secondError) {
+          console.error('Second database check also failed:', secondError.message);
+          return false;
+        }
+        
+        console.log('Second database check succeeded despite first failure');
+        return true;
       }
       
       console.log('Database connection successful');
@@ -85,7 +99,19 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       } else {
         console.error('Database connection error:', error.message);
       }
-      return false;
+      
+      // Try one more simple query with different approach
+      try {
+        const { data, error: fallbackError } = await supabase.rpc('get_service_status');
+        if (!fallbackError) {
+          console.log('Fallback connection check successful');
+          return true;
+        }
+        return false;
+      } catch (fallbackError) {
+        console.error('Fallback connection check failed:', fallbackError);
+        return false;
+      }
     }
   } catch (error: any) {
     console.error('Exception in database connection check:', error.message);
