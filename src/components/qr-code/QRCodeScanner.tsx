@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { QrCode, X, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession } from '@/utils/sessionUtils';
 
 const QRCodeScanner = () => {
   const { user } = useAuth();
@@ -30,7 +30,70 @@ const QRCodeScanner = () => {
     }
   }, [scanning]);
 
-  // Enhanced session activation function with retry logic
+  // Enhanced verification function with retry mechanism and better error handling
+  const verifySession = useCallback(async (sessionId: string, maxRetries = 3): Promise<{
+    verified: boolean;
+    data?: any;
+    error?: string;
+  }> => {
+    let attempt = 0;
+    
+    while (attempt <= maxRetries) {
+      try {
+        console.log(`Verifying session (attempt ${attempt + 1}/${maxRetries + 1}):`, sessionId);
+        
+        // First check if session exists to handle early failures quickly
+        const sessionExists = await checkSessionExists(sessionId);
+        if (!sessionExists && attempt < maxRetries) {
+          console.log(`Session not found in quick check (attempt ${attempt + 1}), trying again...`);
+          attempt++;
+          await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+          continue;
+        }
+        
+        // Use our enhanced utility function to verify the session
+        const { exists, isActive, data, error } = await verifyAttendanceSession(sessionId, true);
+        
+        if (!exists) {
+          console.error(`Session not found (attempt ${attempt + 1}):`, error);
+          
+          if (attempt < maxRetries) {
+            attempt++;
+            await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+            continue;
+          }
+          
+          return { verified: false, error: 'Session not found. Please ask your teacher to check the QR code.' };
+        }
+        
+        console.log(`Session verified (attempt ${attempt + 1}):`, data);
+        
+        // Always force activate as an extra step to ensure it's active
+        if (!isActive) {
+          console.log('Session found but not active, force activating...');
+          const activated = await activateAttendanceSession(sessionId);
+          if (!activated) {
+            console.warn('Failed to activate session');
+          }
+        }
+        
+        return { verified: true, data };
+      } catch (error: any) {
+        console.error(`Exception in verifySession (attempt ${attempt + 1}):`, error);
+        
+        if (attempt < maxRetries) {
+          attempt++;
+          await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+          continue;
+        }
+        
+        return { verified: false, error: error.message || 'Unknown error verifying session' };
+      }
+    }
+    
+    return { verified: false, error: 'Failed after multiple attempts' };
+  }, []);
+
   const activateSession = useCallback(async (sessionId: string): Promise<boolean> => {
     if (!sessionId) return false;
     
@@ -86,71 +149,6 @@ const QRCodeScanner = () => {
       setActivationInProgress(false);
     }
   }, []);
-
-  // Enhanced verification function with retry mechanism
-  const verifySession = useCallback(async (sessionId: string, maxRetries = 2): Promise<{
-    verified: boolean;
-    data?: any;
-    error?: string;
-  }> => {
-    let attempt = 0;
-    
-    while (attempt <= maxRetries) {
-      try {
-        console.log(`Verifying session (attempt ${attempt + 1}/${maxRetries + 1}):`, sessionId);
-        
-        const { data, error } = await supabase
-          .from('attendance_sessions')
-          .select('is_active, class_id, classes(name)')
-          .eq('id', sessionId)
-          .maybeSingle();
-        
-        if (error) {
-          console.error(`Verification error (attempt ${attempt + 1}):`, error);
-          attempt++;
-          if (attempt <= maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
-            continue;
-          }
-          return { verified: false, error: 'Database error: ' + error.message };
-        }
-        
-        if (!data) {
-          console.error(`Session not found (attempt ${attempt + 1}):`, sessionId);
-          attempt++;
-          if (attempt <= maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
-            continue;
-          }
-          return { verified: false, error: 'Session not found' };
-        }
-        
-        console.log(`Session verified (attempt ${attempt + 1}):`, data);
-        
-        // If not active, try to activate
-        if (!data.is_active) {
-          const activated = await activateSession(sessionId);
-          if (!activated) {
-            console.warn('Failed to activate session');
-          }
-        }
-        
-        return { verified: true, data };
-      } catch (error: any) {
-        console.error(`Exception in verifySession (attempt ${attempt + 1}):`, error);
-        attempt++;
-        
-        if (attempt <= maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
-          continue;
-        }
-        
-        return { verified: false, error: error.message || 'Unknown error verifying session' };
-      }
-    }
-    
-    return { verified: false, error: 'Failed after multiple attempts' };
-  }, [activateSession]);
 
   const markAttendance = useCallback(async (sessionId: string, qrData: any) => {
     if (!user || !sessionId) {

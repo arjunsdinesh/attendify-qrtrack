@@ -1,4 +1,3 @@
-
 import { useEffect, memo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,6 @@ import { supabase, checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
 
-// Memoized component to prevent unnecessary re-renders
 const MemoizedQRScanner = memo(QRCodeScanner);
 
 const ScanQR = () => {
@@ -21,17 +19,15 @@ const ScanQR = () => {
   const [scannerKey, setScannerKey] = useState<number>(Date.now());
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   
-  // Reset scanner state
   const resetScanner = useCallback(() => {
     setScannerKey(Date.now());
     toast.info("Scanner reset. Try scanning again.");
   }, []);
   
-  // Function to check database connection with enhanced error handling
   const checkConnection = useCallback(async () => {
     try {
       setIsCheckingConnection(true);
-      const isConnected = await checkSupabaseConnection(true); // Force fresh check
+      const isConnected = await checkSupabaseConnection(true);
       setConnectionStatus(isConnected);
       
       if (!isConnected) {
@@ -40,17 +36,30 @@ const ScanQR = () => {
       } else {
         console.log('Database connection successful');
         
-        // Perform a direct check on the attendance_sessions table
-        const { error: sessionCheckError } = await supabase
+        const { error: sessionError } = await supabase
           .from('attendance_sessions')
-          .select('count', { count: 'exact', head: true })
+          .select('id', { head: true })
           .limit(1);
           
-        if (sessionCheckError) {
-          console.error('Cannot access attendance sessions:', sessionCheckError);
-          toast.warning('Connected to database, but attendance data may be unavailable');
+        if (sessionError) {
+          console.warn('Connected but session data access issue:', sessionError);
+          toast.warning('Connected to database, but might have limited access to attendance data');
         } else {
-          toast.success('Successfully connected to attendance system');
+          const { data: activeSession, error: activeError } = await supabase
+            .from('attendance_sessions')
+            .select('id')
+            .eq('is_active', true)
+            .limit(1);
+            
+          if (activeError) {
+            console.warn('Issue checking active sessions:', activeError);
+          } else if (activeSession && activeSession.length > 0) {
+            console.log('Found at least one active session');
+            toast.success('Successfully connected. Active sessions available for scanning.');
+          } else {
+            console.log('No active sessions found');
+            toast.success('Connected to attendance system. No active sessions detected.');
+          }
         }
       }
       
@@ -65,11 +74,9 @@ const ScanQR = () => {
     }
   }, []);
   
-  // Check for active attendance sessions when the page loads
   useEffect(() => {
     checkConnection();
     
-    // Reset scanner every 2 minutes to ensure fresh state
     const resetInterval = setInterval(resetScanner, 120000);
     
     return () => {
@@ -83,7 +90,6 @@ const ScanQR = () => {
     }
   }, [user, loading, navigate]);
 
-  // Optimized loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
