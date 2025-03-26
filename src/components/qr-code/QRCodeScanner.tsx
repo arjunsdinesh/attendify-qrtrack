@@ -7,7 +7,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { QrCode, X, CheckCircle2, RefreshCw } from 'lucide-react';
+import { QrCode, X, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession } from '@/utils/sessionUtils';
 
@@ -23,6 +23,7 @@ const QRCodeScanner = () => {
   const [activationInProgress, setActivationInProgress] = useState(false);
   const [sessionVerified, setSessionVerified] = useState(false);
   const processingRef = useRef<boolean>(false);
+  const scannedSessionIdRef = useRef<string | null>(null);
   
   useEffect(() => {
     if (scanning) {
@@ -38,6 +39,7 @@ const QRCodeScanner = () => {
     error?: string;
   }> => {
     let attempt = 0;
+    scannedSessionIdRef.current = sessionId;
     
     while (attempt <= maxRetries) {
       try {
@@ -52,7 +54,7 @@ const QRCodeScanner = () => {
           continue;
         }
         
-        // Use our enhanced utility function to verify the session
+        // Use our enhanced utility function to verify the session with force activation
         const { exists, isActive, data, error } = await verifyAttendanceSession(sessionId, true);
         
         if (!exists) {
@@ -75,6 +77,16 @@ const QRCodeScanner = () => {
           const activated = await activateAttendanceSession(sessionId);
           if (!activated) {
             console.warn('Failed to activate session');
+            
+            // One last try with direct update
+            const { error: activateError } = await supabase
+              .from('attendance_sessions')
+              .update({ is_active: true, end_time: null })
+              .eq('id', sessionId);
+              
+            if (activateError) {
+              console.error('Final activation attempt failed:', activateError);
+            }
           }
         }
         
@@ -126,7 +138,13 @@ const QRCodeScanner = () => {
         return true;
       }
       
-      // Try to activate the session
+      // Try to activate the session with multiple approaches
+      const activated = await activateAttendanceSession(sessionId);
+      if (activated) {
+        return true;
+      }
+      
+      // Direct update as fallback
       const { data: activateData, error: activateError } = await supabase
         .from('attendance_sessions')
         .update({ 
@@ -160,6 +178,7 @@ const QRCodeScanner = () => {
     try {
       console.log('Marking attendance for session:', sessionId, 'student:', user.id);
       
+      // First check if attendance is already marked
       const { data: existingRecord, error: checkError } = await supabase
         .from('attendance_records')
         .select('id')
@@ -182,6 +201,7 @@ const QRCodeScanner = () => {
       
       const timestamp = new Date().toISOString();
       
+      // Create the attendance record
       const { data, error } = await supabase
         .from('attendance_records')
         .insert({
@@ -228,6 +248,49 @@ const QRCodeScanner = () => {
       return false;
     }
   }, [user]);
+  
+  // Retry scanning logic when there's an error
+  const retryScanning = useCallback(() => {
+    setError(null);
+    setRetryCount(prev => prev + 1);
+    
+    // If we have a session ID from a failed attempt, try to verify and activate it again
+    if (scannedSessionIdRef.current) {
+      const sessionId = scannedSessionIdRef.current;
+      
+      setActivationInProgress(true);
+      console.log('Retrying with session ID:', sessionId);
+      
+      // Try to force activate the session
+      supabase
+        .from('attendance_sessions')
+        .update({ is_active: true, end_time: null })
+        .eq('id', sessionId)
+        .then(({ error }) => {
+          if (error) {
+            console.error('Error activating session on retry:', error);
+          } else {
+            console.log('Successfully activated session on retry');
+            // Restart scanning
+            if (scanning) {
+              setScanning(false);
+              setTimeout(() => setScanning(true), 300);
+            } else {
+              setScanning(true);
+            }
+          }
+          setActivationInProgress(false);
+        });
+    } else {
+      // Just restart scanning
+      if (scanning) {
+        setScanning(false);
+        setTimeout(() => setScanning(true), 300);
+      } else {
+        setScanning(true);
+      }
+    }
+  }, [scanning]);
 
   const handleScan = async (result: any) => {
     try {
@@ -279,6 +342,7 @@ const QRCodeScanner = () => {
       }
       
       console.log('Processing session: ', qrData.sessionId);
+      scannedSessionIdRef.current = qrData.sessionId;
       
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidPattern.test(qrData.sessionId)) {
@@ -290,6 +354,9 @@ const QRCodeScanner = () => {
       }
 
       try {
+        // Force activate the session first
+        await activateSession(qrData.sessionId);
+        
         // Use the enhanced session verification function
         const { verified, data: sessionData, error: verifyError } = await verifySession(qrData.sessionId, 3);
         
@@ -379,19 +446,22 @@ const QRCodeScanner = () => {
         {error && (
           <Alert className="border-red-200 bg-red-50 text-red-800">
             <AlertDescription className="flex justify-between items-center">
-              <span>{error}</span>
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
               <Button 
                 size="sm" 
                 variant="outline" 
-                onClick={() => {
-                  setError(null);
-                  setRetryCount(0);
-                  if (scanning) toggleScanner();
-                  setTimeout(() => toggleScanner(), 500);
-                }}
-                className="ml-2 flex items-center gap-1"
+                onClick={retryScanning}
+                className="ml-2 flex items-center gap-1 whitespace-nowrap"
+                disabled={activationInProgress}
               >
-                <RefreshCw className="h-3 w-3" />
+                {activationInProgress ? (
+                  <LoadingSpinner className="h-3 w-3 mr-1" />
+                ) : (
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                )}
                 <span>Retry</span>
               </Button>
             </AlertDescription>
@@ -400,13 +470,19 @@ const QRCodeScanner = () => {
         
         {successMessage && !error && (
           <Alert className="border-green-200 bg-green-50 text-green-800">
-            <AlertDescription>{successMessage}</AlertDescription>
+            <AlertDescription className="flex items-center">
+              <CheckCircle2 className="h-4 w-4 mr-2 flex-shrink-0" />
+              {successMessage}
+            </AlertDescription>
           </Alert>
         )}
         
         {sessionVerified && !error && !successMessage && (
           <Alert className="border-blue-200 bg-blue-50 text-blue-800">
-            <AlertDescription>Session verified. Recording attendance...</AlertDescription>
+            <AlertDescription className="flex items-center">
+              <LoadingSpinner className="h-4 w-4 mr-2" />
+              Session verified. Recording attendance...
+            </AlertDescription>
           </Alert>
         )}
         

@@ -46,7 +46,7 @@ async function fetchSessionExtendedData(sessionId: string): Promise<{
 }> {
   return supabase
     .from('attendance_sessions')
-    .select('is_active, class_id, classes(name)')
+    .select('id, is_active, class_id, classes(name)')
     .eq('id', sessionId)
     .maybeSingle();
 }
@@ -190,7 +190,8 @@ export const verifyAttendanceSession = async (
         data = {
           is_active: retryData.is_active,
           class_id: '', // Provide default values for required properties
-          classes: { name: 'Unknown Class' }
+          classes: { name: 'Unknown Class' },
+          id: retryData.id
         };
       } else {
         data = fullData;

@@ -66,6 +66,22 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     }, 15000); // Increased to 15 seconds for more reliable checking
     
     try {
+      // First check attendance_sessions specifically since that's what we need
+      const { error: sessionsError } = await supabase
+        .from('attendance_sessions')
+        .select('count', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .limit(1)
+        .abortSignal(controller.signal);
+      
+      if (!sessionsError) {
+        console.log('Attendance sessions table connection successful');
+        clearTimeout(timeoutId);
+        return true;
+      }
+      
+      console.warn('Could not check attendance sessions, trying profiles table:', sessionsError.message);
+      
       // Try a simple query first to check database access
       const { error } = await supabase.from('profiles')
         .select('count', { count: 'exact', head: true })
@@ -102,9 +118,20 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       
       // Try one more simple query with different approach
       try {
-        const { data, error: fallbackError } = await supabase.rpc('get_service_status');
+        // Direct query to active sessions
+        const { data, error: fallbackError } = await supabase
+          .from('attendance_sessions')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1);
+        
         if (!fallbackError) {
           console.log('Fallback connection check successful');
+          if (data && data.length > 0) {
+            console.log('Found active sessions:', data.length);
+          } else {
+            console.log('Connection successful but no active sessions found');
+          }
           return true;
         }
         return false;
