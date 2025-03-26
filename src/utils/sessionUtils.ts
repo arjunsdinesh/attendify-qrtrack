@@ -48,7 +48,7 @@ export const verifyAttendanceSession = async (
       console.log('Attendance session not found. Attempting a second verification:', sessionId);
       
       // Try a simpler query as a fallback
-      const { data: retryData, error: retryError } = await supabase
+      let { data: retryData, error: retryError } = await supabase
         .from('attendance_sessions')
         .select('id, is_active')
         .eq('id', sessionId)
@@ -67,7 +67,7 @@ export const verifyAttendanceSession = async (
       console.log('Session found on second attempt:', retryData);
       
       // Continue with the found session and get extended data
-      const { data: fullData, error: fullError } = await supabase
+      let { data: fullData, error: fullError } = await supabase
         .from('attendance_sessions')
         .select('is_active, class_id, classes(name)')
         .eq('id', sessionId)
@@ -88,7 +88,7 @@ export const verifyAttendanceSession = async (
     if (forceActivate) {
       console.log('Attempting to ensure session is active:', sessionId);
       
-      const { data: updateData, error: updateError } = await supabase
+      let { data: updateData, error: updateError } = await supabase
         .from('attendance_sessions')
         .update({ 
           is_active: true, 
