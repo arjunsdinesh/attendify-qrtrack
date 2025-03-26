@@ -29,7 +29,7 @@ export const verifyAttendanceSession = async (
     console.log('Verifying attendance session:', sessionId);
     
     // First check if the session exists with a more tolerant function
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('attendance_sessions')
       .select('is_active, class_id, classes(name)')
       .eq('id', sessionId)
