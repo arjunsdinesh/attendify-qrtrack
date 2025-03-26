@@ -1,24 +1,21 @@
-
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
 import { useEffect } from 'react';
-import { ClassList } from '@/components/classes/ClassList';
+import ClassList from '@/components/classes/ClassList';
 import { SessionActivator } from '@/components/debug/SessionActivator';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   
-  // Redirect if not authenticated or not a student
   useEffect(() => {
     if (!loading && (!user || user.role !== 'student')) {
       navigate('/');
     }
   }, [user, loading, navigate]);
 
-  // Show loading or redirect if not a student
   if (loading || !user) {
     return (
       <DashboardLayout>
@@ -36,7 +33,6 @@ const StudentDashboard = () => {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Student Dashboard</h1>
         
-        {/* Session Activator for debugging */}
         <SessionActivator />
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
