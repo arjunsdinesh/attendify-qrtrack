@@ -1,4 +1,3 @@
-
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -21,57 +20,48 @@ const Index = () => {
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
   const [connectionCheckTimeout, setConnectionCheckTimeout] = useState(false);
 
+  const checkConnection = async () => {
+    try {
+      setDbConnected(null); // Set to checking
+      
+      // Shorter timeout for UI responsiveness
+      const timeoutId = setTimeout(() => {
+        console.log('UI timeout for database connection check');
+        setConnectionCheckTimeout(true);
+      }, 3000); // 3 second UI timeout
+      
+      const connected = await checkSupabaseConnection();
+      
+      clearTimeout(timeoutId);
+      
+      setDbConnected(connected);
+      if (!connected) {
+        console.error('Database connection failed');
+        toast.error('Database connection failed. Please check your configuration or try again later.');
+      } else {
+        console.log('Database connection successful');
+      }
+    } catch (error) {
+      console.error('Error checking DB connection:', error);
+      setDbConnected(false);
+    } finally {
+      setLocalLoading(false);
+      setEmailConfirmationChecked(true);
+    }
+  };
+  
   useEffect(() => {
     let isMounted = true;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    const checkConnection = async () => {
-      try {
-        if (isMounted) setDbConnected(null); // Set to checking
-        
-        // Set a timeout to prevent getting stuck if the connection check takes too long
-        timeoutId = setTimeout(() => {
-          if (isMounted) {
-            console.log('Database connection check timed out');
-            setConnectionCheckTimeout(true);
-            setDbConnected(false);
-            setLocalLoading(false);
-            setEmailConfirmationChecked(true);
-          }
-        }, 5000); // 5 second timeout
-        
-        const connected = await checkSupabaseConnection();
-        
-        // Clear the timeout since we got a response
-        clearTimeout(timeoutId);
-        
-        if (!isMounted) return;
-        
-        setDbConnected(connected);
-        if (!connected) {
-          console.error('Database connection failed');
-          toast.error('Database connection failed. Please check your configuration or try again later.');
-        } else {
-          console.log('Database connection successful');
-        }
-      } catch (error) {
-        if (!isMounted) return;
-        console.error('Error checking DB connection:', error);
-        setDbConnected(false);
-      } finally {
-        if (isMounted) {
-          clearTimeout(timeoutId); // Ensure timeout is cleared
-          setLocalLoading(false);
-          setEmailConfirmationChecked(true);
-        }
-      }
+    
+    const runConnectionCheck = async () => {
+      await checkConnection();
+      if (!isMounted) return;
     };
     
-    checkConnection();
+    runConnectionCheck();
     
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId); // Clean up timeout on unmount
     };
   }, []);
 
@@ -110,9 +100,8 @@ const Index = () => {
   }
 
   if (!user) {
-    // Only show disconnected status, hide the connected status
-    const connectionStatus = dbConnected === null && !connectionCheckTimeout ? 'checking' : 
-                            !dbConnected ? 'disconnected' : null;
+    const connectionStatus = dbConnected === null ? 'checking' : 
+                            dbConnected ? 'connected' : 'disconnected';
     
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
@@ -128,19 +117,17 @@ const Index = () => {
           )}
           
           <Card className="border-2 shadow-lg">
-            {connectionStatus && <ConnectionStatus status={connectionStatus} />}
+            <ConnectionStatus 
+              status={connectionStatus} 
+              onRetry={checkConnection} 
+            />
             <CardContent className="pt-6">
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold mb-2">Attendify</h1>
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
-                {connectionCheckTimeout && (
+                {connectionCheckTimeout && dbConnected === null && (
                   <p className="text-amber-600 mt-2">
-                    Database connection check timed out. You can still attempt to use the app.
-                  </p>
-                )}
-                {!dbConnected && dbConnected !== null && !connectionCheckTimeout && (
-                  <p className="text-destructive mt-2">
-                    Database connection error. Please check your configuration or try again later.
+                    Connection check is taking longer than expected. You can still attempt to use the app.
                   </p>
                 )}
               </div>

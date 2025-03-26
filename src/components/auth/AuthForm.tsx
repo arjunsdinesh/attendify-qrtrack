@@ -13,16 +13,16 @@ const AuthForm = () => {
   const { initialRole } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [retryCount, setRetryCount] = useState(0);
 
   // Check Supabase connection on component mount
   useEffect(() => {
     const checkConnection = async () => {
       try {
         const isConnected = await checkSupabaseConnection();
-        // Only set 'disconnected' status if there's an error, don't show 'connected'
         setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-        if (!isConnected) {
-          toast.error("Unable to connect to Supabase. Please check your configuration.");
+        if (!isConnected && retryCount === 0) {
+          console.warn("Initial connection check failed");
         }
       } catch (error) {
         setConnectionStatus('disconnected');
@@ -31,18 +31,23 @@ const AuthForm = () => {
     };
     
     checkConnection();
-  }, []);
+  }, [retryCount]);
 
   // Retry connection when disconnected
   const handleRetryConnection = async () => {
     setConnectionStatus('checking');
+    setRetryCount(prev => prev + 1);
     try {
       const isConnected = await checkSupabaseConnection();
       setConnectionStatus(isConnected ? 'connected' : 'disconnected');
       if (isConnected) {
         toast.success("Connection restored successfully!");
       } else {
-        toast.error("Still unable to connect. Please try again later.");
+        if (retryCount >= 2) {
+          toast.error("Still unable to connect. The database may be unavailable.");
+        } else {
+          toast.error("Still unable to connect. Please try again later.");
+        }
       }
     } catch (error) {
       setConnectionStatus('disconnected');
@@ -58,7 +63,7 @@ const AuthForm = () => {
         {connectionStatus !== 'connected' && (
           <ConnectionStatus 
             status={connectionStatus} 
-            onRetry={connectionStatus === 'disconnected' ? handleRetryConnection : undefined} 
+            onRetry={handleRetryConnection} 
           />
         )}
         

@@ -5,18 +5,21 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-// Create the Supabase client with the hardcoded values
+// Create the Supabase client with improved configuration
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storageKey: 'supabase.auth.token', // Consistent storage key
   },
   realtime: {
-    timeout: 60000,
+    timeout: 30000, // Reduced timeout for faster failure detection
   },
   global: {
-    fetch: (url, options) => fetch(url, { ...options }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
   },
   db: {
     schema: 'public'
@@ -49,41 +52,43 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Add timeout to the connection check
+// Improved connection check with better error handling
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('Performing database connection check...');
     
-    // Create a promise that rejects after a timeout
-    const timeout = (ms: number) => new Promise((_, reject) => 
-      setTimeout(() => reject(new Error(`Connection attempt timed out after ${ms/1000} seconds`)), ms)
-    );
+    // Simple health check query with abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('Connection check timed out after 10 seconds');
+      controller.abort();
+    }, 10000); // 10 second timeout
     
-    // Try up to 4 times with increasing timeouts
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      try {
-        console.log(`Connection attempt ${attempt} of 4`);
-        // Race between the connection and timeout
-        await Promise.race([
-          supabase.from('profiles').select('count', { count: 'exact', head: true }),
-          timeout(5000) // 5 second timeout
-        ]);
-        
-        // If we get here, the connection was successful
-        console.log('Database connection successful');
-        return true;
-      } catch (error: any) {
-        console.log(error.message);
-        if (attempt < 4 && error.message.includes('timed out')) {
-          continue; // Try again on timeout
-        }
-        throw error; // Other errors or final timeout
+    try {
+      const { error } = await supabase.from('profiles')
+        .select('count', { count: 'exact', head: true })
+        .abortSignal(controller.signal);
+      
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        console.error('Database connection check failed:', error.message);
+        return false;
       }
+      
+      console.log('Database connection successful');
+      return true;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error('Database connection timed out');
+      } else {
+        console.error('Database connection error:', error.message);
+      }
+      return false;
     }
-    
-    return false; // Should not reach here but TypeScript needs it
-  } catch (error) {
-    console.error('Database connection failed:', error);
+  } catch (error: any) {
+    console.error('Exception in database connection check:', error.message);
     return false;
   }
 };

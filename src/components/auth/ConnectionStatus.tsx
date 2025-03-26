@@ -10,6 +10,7 @@ interface ConnectionStatusProps {
 
 const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   const [retryAttempted, setRetryAttempted] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   
   // Reset retry status when connection status changes
   useEffect(() => {
@@ -20,6 +21,7 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   
   const handleRetry = () => {
     setRetryAttempted(true);
+    setRetryCount(prev => prev + 1);
     if (onRetry) {
       onRetry();
     }
@@ -57,9 +59,11 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
             <p className="text-xs mt-1 flex items-center">
               <AlertTriangle className="h-3 w-3 mr-1" />
               <span>
-                {retryAttempted ? 
-                  "Connection still failed. Try refreshing the page or contact support." :
-                  "Try using the retry button or check if Supabase is down."}
+                {retryCount > 2 ? 
+                  "Multiple connection attempts failed. The database may be unavailable." :
+                  retryAttempted ? 
+                    "Connection still failed. Try again or check if Supabase is down." :
+                    "Try using the retry button or check your network connection."}
               </span>
             </p>
             {onRetry && (
@@ -70,7 +74,7 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
                 onClick={handleRetry}
               >
                 <RefreshCw className="h-3 w-3 mr-1" />
-                Retry Connection
+                Retry Connection {retryCount > 0 ? `(${retryCount})` : ''}
               </Button>
             )}
           </div>
