@@ -13,6 +13,41 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui-components';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
+// Define interfaces for type safety
+interface SessionClass {
+  name: string;
+  course_code: string;
+}
+
+interface SessionDetails {
+  id: string;
+  date: string;
+  start_time: string;
+  end_time: string | null;
+  is_active: boolean;
+  classes: SessionClass;
+}
+
+interface StudentProfile {
+  register_number?: string;
+  roll_number?: string;
+  department?: string;
+  semester?: number;
+}
+
+interface StudentData {
+  id: string;
+  full_name: string;
+  email: string;
+  student_profiles: StudentProfile[];
+}
+
+interface AttendanceRecord {
+  id: string;
+  timestamp: string;
+  student: StudentData;
+}
+
 const AttendanceRecords = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -23,41 +58,6 @@ const AttendanceRecords = () => {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Define interfaces for type safety
-  interface SessionClass {
-    name: string;
-    course_code: string;
-  }
-  
-  interface SessionDetails {
-    id: string;
-    date: string;
-    start_time: string;
-    end_time: string | null;
-    is_active: boolean;
-    classes: SessionClass;
-  }
-  
-  interface StudentProfile {
-    register_number?: string;
-    roll_number?: string;
-    department?: string;
-    semester?: number;
-  }
-  
-  interface StudentData {
-    id: string;
-    full_name: string;
-    email: string;
-    student_profiles: StudentProfile[];
-  }
-  
-  interface AttendanceRecord {
-    id: string;
-    timestamp: string;
-    student: StudentData;
-  }
   
   useEffect(() => {
     // Redirect if not authenticated or not a teacher
@@ -129,9 +129,10 @@ const AttendanceRecords = () => {
       
       if (sessionError) throw sessionError;
       
-      if (sessionData && sessionData.classes) {
-        // Ensure we're correctly accessing the class details
-        const classDetails = sessionData.classes as SessionClass;
+      // Ensure proper typing of the sessionData
+      if (sessionData) {
+        // Handle the classes data correctly - it's returned as an object by Supabase
+        const classData = sessionData.classes as unknown as SessionClass;
         
         setSessionDetails({
           id: sessionData.id,
@@ -140,8 +141,8 @@ const AttendanceRecords = () => {
           end_time: sessionData.end_time,
           is_active: sessionData.is_active,
           classes: {
-            name: classDetails.name,
-            course_code: classDetails.course_code
+            name: classData.name,
+            course_code: classData.course_code
           }
         });
       }
@@ -181,16 +182,16 @@ const AttendanceRecords = () => {
       console.log('Fetched records:', data);
       
       // Properly transform the data to match our AttendanceRecord interface
-      const transformedRecords: AttendanceRecord[] = data?.map(record => ({
+      const transformedRecords: AttendanceRecord[] = data.map(record => ({
         id: record.id,
         timestamp: record.timestamp,
         student: {
-          id: record.student[0].id,
-          full_name: record.student[0].full_name,
-          email: record.student[0].email,
-          student_profiles: record.student[0].student_profiles
+          id: record.student.id,
+          full_name: record.student.full_name,
+          email: record.student.email,
+          student_profiles: record.student.student_profiles
         }
-      })) || [];
+      }));
       
       setRecords(transformedRecords);
     } catch (error: any) {
