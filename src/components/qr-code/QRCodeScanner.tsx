@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,128 @@ const QRCodeScanner = () => {
       setSuccessMessage(null);
     }
   }, [scanning]);
+
+  // Enhanced session activation function with retry logic
+  const activateSession = useCallback(async (sessionId: string): Promise<boolean> => {
+    if (!sessionId) return false;
+    
+    console.log('Attempting to activate session:', sessionId);
+    setActivationInProgress(true);
+    
+    try {
+      // First, verify the session exists
+      const { data: sessionData, error: checkError } = await supabase
+        .from('attendance_sessions')
+        .select('id, is_active')
+        .eq('id', sessionId)
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error('Error checking session:', checkError);
+        return false;
+      }
+      
+      if (!sessionData) {
+        console.error('Session not found:', sessionId);
+        return false;
+      }
+      
+      console.log('Session found, active status:', sessionData.is_active);
+      
+      // If already active, return true
+      if (sessionData.is_active) {
+        return true;
+      }
+      
+      // Try to activate the session
+      const { data: activateData, error: activateError } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        })
+        .eq('id', sessionId)
+        .select('is_active')
+        .single();
+      
+      if (activateError) {
+        console.error('Error activating session:', activateError);
+        return false;
+      }
+      
+      return !!activateData?.is_active;
+    } catch (error) {
+      console.error('Exception in activateSession:', error);
+      return false;
+    } finally {
+      setActivationInProgress(false);
+    }
+  }, []);
+
+  // Enhanced verification function with retry mechanism
+  const verifySession = useCallback(async (sessionId: string, maxRetries = 2): Promise<{
+    verified: boolean;
+    data?: any;
+    error?: string;
+  }> => {
+    let attempt = 0;
+    
+    while (attempt <= maxRetries) {
+      try {
+        console.log(`Verifying session (attempt ${attempt + 1}/${maxRetries + 1}):`, sessionId);
+        
+        const { data, error } = await supabase
+          .from('attendance_sessions')
+          .select('is_active, class_id, classes(name)')
+          .eq('id', sessionId)
+          .maybeSingle();
+        
+        if (error) {
+          console.error(`Verification error (attempt ${attempt + 1}):`, error);
+          attempt++;
+          if (attempt <= maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+            continue;
+          }
+          return { verified: false, error: 'Database error: ' + error.message };
+        }
+        
+        if (!data) {
+          console.error(`Session not found (attempt ${attempt + 1}):`, sessionId);
+          attempt++;
+          if (attempt <= maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+            continue;
+          }
+          return { verified: false, error: 'Session not found' };
+        }
+        
+        console.log(`Session verified (attempt ${attempt + 1}):`, data);
+        
+        // If not active, try to activate
+        if (!data.is_active) {
+          const activated = await activateSession(sessionId);
+          if (!activated) {
+            console.warn('Failed to activate session');
+          }
+        }
+        
+        return { verified: true, data };
+      } catch (error: any) {
+        console.error(`Exception in verifySession (attempt ${attempt + 1}):`, error);
+        attempt++;
+        
+        if (attempt <= maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+          continue;
+        }
+        
+        return { verified: false, error: error.message || 'Unknown error verifying session' };
+      }
+    }
+    
+    return { verified: false, error: 'Failed after multiple attempts' };
+  }, [activateSession]);
 
   const markAttendance = useCallback(async (sessionId: string, qrData: any) => {
     if (!user || !sessionId) {
@@ -84,6 +207,7 @@ const QRCodeScanner = () => {
       
       console.log('Attendance record successfully created:', data);
       
+      // Double-check the record was created
       const { data: verifyData, error: verifyError } = await supabase
         .from('attendance_records')
         .select('id')
@@ -167,55 +291,23 @@ const QRCodeScanner = () => {
       }
 
       try {
-        setActivationInProgress(true);
+        // Use the enhanced session verification function
+        const { verified, data: sessionData, error: verifyError } = await verifySession(qrData.sessionId, 3);
         
-        console.log('Verifying session...');
-        
-        const { data: sessionData, error: sessionError } = await supabase
-          .from('attendance_sessions')
-          .select('is_active, class_id, classes(name)')
-          .eq('id', qrData.sessionId)
-          .maybeSingle();
-          
-        if (sessionError) {
-          console.error('Error checking session:', sessionError);
-          setError('Error verifying session. Please try again.');
+        if (!verified) {
+          const errorMessage = verifyError || 'Session verification failed';
+          console.error('Session verification failed:', errorMessage);
+          setError('Attendance session not found or not active. Please ask your teacher to check the QR code.');
           setProcessing(false);
           processingRef.current = false;
-          setActivationInProgress(false);
           return;
         }
         
-        if (!sessionData) {
-          console.error('Session not found:', qrData.sessionId);
-          setError('Attendance session not found. Please ask your teacher to check the QR code.');
-          setProcessing(false);
-          processingRef.current = false;
-          setActivationInProgress(false);
-          return;
-        }
-        
-        console.log('Session found:', sessionData);
-        
-        if (!sessionData.is_active) {
-          console.log('Session is not active, attempting to activate it...');
-          
-          const { data: activateData, error: activateError } = await supabase
-            .from('attendance_sessions')
-            .update({ is_active: true, end_time: null })
-            .eq('id', qrData.sessionId)
-            .select('is_active')
-            .single();
-            
-          if (activateError) {
-            console.error('Error activating session:', activateError);
-          } else {
-            console.log('Session activation result:', activateData);
-          }
-        }
-        
+        console.log('Session verified successfully:', sessionData);
         setSessionVerified(true);
-        console.log('Session verified successfully');
+        
+        // Force activate the session again to ensure it's active
+        await activateSession(qrData.sessionId);
         
         const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
         
@@ -245,14 +337,12 @@ const QRCodeScanner = () => {
       } finally {
         setProcessing(false);
         processingRef.current = false;
-        setActivationInProgress(false);
       }
     } catch (error: any) {
       console.error('Error processing QR code:', error);
       setError(error.message || 'Failed to process QR code');
       setProcessing(false);
       processingRef.current = false;
-      setActivationInProgress(false);
     }
   };
 

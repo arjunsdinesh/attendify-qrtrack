@@ -40,7 +40,7 @@ const ScanQR = () => {
       } else {
         console.log('Database connection successful');
         
-        // Also check if we can access attendance sessions table specifically
+        // Perform a direct check on the attendance_sessions table
         const { error: sessionCheckError } = await supabase
           .from('attendance_sessions')
           .select('count', { count: 'exact', head: true })
