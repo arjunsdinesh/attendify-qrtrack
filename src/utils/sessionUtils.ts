@@ -171,7 +171,7 @@ export const verifyAttendanceSession = async (
     // Return the current state without modifications
     return { 
       exists: true, 
-      isActive: !!data.is_active,
+      isActive: data ? !!data.is_active : false,
       data
     };
   } catch (error: any) {

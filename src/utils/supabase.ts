@@ -16,7 +16,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     timeout: 60000,
   },
   global: {
-    fetch: (url, options) => fetch(url, options),
+    fetch: (url, options) => fetch(url, { ...options }),
   },
   db: {
     schema: 'public'
