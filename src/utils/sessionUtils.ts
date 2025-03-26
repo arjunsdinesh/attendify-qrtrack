@@ -1,4 +1,73 @@
+
 import { supabase } from './supabase';
+
+/**
+ * Type definition for the session data structure
+ */
+interface SessionData {
+  is_active: boolean;
+  class_id: string;
+  classes: {
+    name: string;
+  };
+  id?: string;
+}
+
+/**
+ * Result of session verification
+ */
+interface SessionVerificationResult {
+  exists: boolean;
+  isActive: boolean;
+  data?: SessionData;
+  error?: string;
+}
+
+/**
+ * Fetch session data with basic information
+ */
+async function fetchSessionBasicData(sessionId: string): Promise<{ 
+  data: { id: string; is_active: boolean } | null; 
+  error: any 
+}> {
+  return supabase
+    .from('attendance_sessions')
+    .select('id, is_active')
+    .eq('id', sessionId)
+    .maybeSingle();
+}
+
+/**
+ * Fetch extended session data including class information
+ */
+async function fetchSessionExtendedData(sessionId: string): Promise<{
+  data: SessionData | null;
+  error: any
+}> {
+  return supabase
+    .from('attendance_sessions')
+    .select('is_active, class_id, classes(name)')
+    .eq('id', sessionId)
+    .maybeSingle();
+}
+
+/**
+ * Activate a session by setting is_active to true and clearing end_time
+ */
+async function activateSession(sessionId: string): Promise<{
+  data: { is_active: boolean } | null;
+  error: any
+}> {
+  return supabase
+    .from('attendance_sessions')
+    .update({ 
+      is_active: true, 
+      end_time: null 
+    })
+    .eq('id', sessionId)
+    .select('is_active')
+    .maybeSingle();
+}
 
 /**
  * Verifies if a session exists and is active
@@ -9,12 +78,7 @@ import { supabase } from './supabase';
 export const verifyAttendanceSession = async (
   sessionId: string, 
   forceActivate = true
-): Promise<{
-  exists: boolean;
-  isActive: boolean;
-  data?: any;
-  error?: string;
-}> => {
+): Promise<SessionVerificationResult> => {
   try {
     if (!sessionId) {
       console.error('No session ID provided to verifyAttendanceSession');
@@ -27,12 +91,8 @@ export const verifyAttendanceSession = async (
     
     console.log('Verifying attendance session:', sessionId);
     
-    // First check if the session exists with a more tolerant function
-    let { data, error } = await supabase
-      .from('attendance_sessions')
-      .select('is_active, class_id, classes(name)')
-      .eq('id', sessionId)
-      .maybeSingle();
+    // First check if the session exists with extended data
+    let { data, error } = await fetchSessionExtendedData(sessionId);
     
     if (error) {
       console.error('Error verifying attendance session:', error);
@@ -47,11 +107,7 @@ export const verifyAttendanceSession = async (
       console.log('Attendance session not found. Attempting a second verification:', sessionId);
       
       // Try a simpler query as a fallback
-      let { data: retryData, error: retryError } = await supabase
-        .from('attendance_sessions')
-        .select('id, is_active')
-        .eq('id', sessionId)
-        .maybeSingle();
+      let { data: retryData, error: retryError } = await fetchSessionBasicData(sessionId);
       
       if (retryError || !retryData) {
         console.error('Session definitively not found on second attempt:', sessionId);
@@ -66,15 +122,11 @@ export const verifyAttendanceSession = async (
       console.log('Session found on second attempt:', retryData);
       
       // Continue with the found session and get extended data
-      let { data: fullData, error: fullError } = await supabase
-        .from('attendance_sessions')
-        .select('is_active, class_id, classes(name)')
-        .eq('id', sessionId)
-        .maybeSingle();
+      let { data: fullData, error: fullError } = await fetchSessionExtendedData(sessionId);
         
       if (fullError || !fullData) {
         console.log('Got basic session but failed to get full details, proceeding with limited data');
-        // We'll proceed with the basic data we have, but need to ensure it matches the expected shape
+        // Create a properly shaped data object with default values
         data = {
           is_active: retryData.is_active,
           class_id: '', // Provide default values for required properties
@@ -91,15 +143,7 @@ export const verifyAttendanceSession = async (
     if (forceActivate) {
       console.log('Attempting to ensure session is active:', sessionId);
       
-      let { data: updateData, error: updateError } = await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId)
-        .select('is_active')
-        .maybeSingle();
+      let { data: updateData, error: updateError } = await activateSession(sessionId);
       
       if (updateError) {
         console.error('Error activating session:', updateError);
@@ -151,17 +195,8 @@ export const activateAttendanceSession = async (sessionId: string): Promise<bool
     
     console.log('Force activating session:', sessionId);
     
-    // Deliberately using multiple update attempts with different patterns to ensure activation
-    // First attempt: standard update
-    const { data, error } = await supabase
-      .from('attendance_sessions')
-      .update({ 
-        is_active: true, 
-        end_time: null 
-      })
-      .eq('id', sessionId)
-      .select('is_active')
-      .single();
+    // First attempt with standard update
+    const { data, error } = await activateSession(sessionId);
     
     if (error) {
       console.error('Error activating attendance session (attempt 1):', error);
