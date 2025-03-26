@@ -7,7 +7,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { QrCode, X, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react';
+import { QrCode, X, CheckCircle2, RefreshCw, AlertCircle, Camera, CameraOff } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession } from '@/utils/sessionUtils';
 
@@ -22,15 +22,41 @@ const QRCodeScanner = () => {
   const [retryCount, setRetryCount] = useState<number>(0);
   const [activationInProgress, setActivationInProgress] = useState(false);
   const [sessionVerified, setSessionVerified] = useState(false);
+  const [cameraInitializing, setCameraInitializing] = useState(false);
+  const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
   const processingRef = useRef<boolean>(false);
   const scannedSessionIdRef = useRef<string | null>(null);
+  const scannerTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     if (scanning) {
       setError(null);
       setSuccessMessage(null);
+      setCameraInitializing(true);
+      
+      // Set a timer to detect if camera isn't initializing
+      scannerTimerRef.current = setTimeout(() => {
+        if (cameraInitializing) {
+          console.log('Camera initialization timeout - camera might not be working');
+          setCameraInitializing(false);
+          setError('Camera didn\'t initialize in time. Please check camera permissions and try again.');
+        }
+      }, 8000); // 8 second timeout for camera initialization
+    } else {
+      setCameraInitializing(false);
+      if (scannerTimerRef.current) {
+        clearTimeout(scannerTimerRef.current);
+        scannerTimerRef.current = null;
+      }
     }
-  }, [scanning]);
+    
+    return () => {
+      if (scannerTimerRef.current) {
+        clearTimeout(scannerTimerRef.current);
+        scannerTimerRef.current = null;
+      }
+    };
+  }, [scanning, cameraInitializing]);
 
   // Enhanced verification function with retry mechanism and better error handling
   const verifySession = useCallback(async (sessionId: string, maxRetries = 3): Promise<{
@@ -293,6 +319,13 @@ const QRCodeScanner = () => {
   }, [scanning]);
 
   const handleScan = async (result: any) => {
+    // Clear camera initialization state since we got a scan result
+    setCameraInitializing(false);
+    if (scannerTimerRef.current) {
+      clearTimeout(scannerTimerRef.current);
+      scannerTimerRef.current = null;
+    }
+    
     try {
       if (!result || !result.length || !result[0]?.rawValue) {
         return;
@@ -415,15 +448,50 @@ const QRCodeScanner = () => {
 
   const handleError = (error: any) => {
     console.error('QR scanner error:', error);
-    setError('Failed to access camera. Please check permissions.');
+    setCameraInitializing(false);
+    
+    // Clear the camera initialization timer
+    if (scannerTimerRef.current) {
+      clearTimeout(scannerTimerRef.current);
+      scannerTimerRef.current = null;
+    }
+    
+    // Check if it's a permission-related error
+    if (error.name === 'NotAllowedError' || 
+        error.message?.includes('Permission') || 
+        error.message?.includes('permission')) {
+      setCameraPermissionDenied(true);
+      setError('Camera access denied. Please check your browser settings and allow camera permissions.');
+    } else if (error.name === 'NotFoundError' || 
+               error.message?.includes('device') || 
+               error.message?.includes('Device')) {
+      setError('No camera found on this device, or the camera is being used by another application.');
+    } else {
+      setError('Failed to access camera. Please check permissions and try again.');
+    }
+    
     setScanning(false);
   };
 
+  // Callback for when the camera initializes successfully
+  const handleCameraStart = () => {
+    console.log('Camera started successfully');
+    setCameraInitializing(false);
+    setCameraPermissionDenied(false);
+    if (scannerTimerRef.current) {
+      clearTimeout(scannerTimerRef.current);
+      scannerTimerRef.current = null;
+    }
+  };
+
   const toggleScanner = () => {
+    // Reset all states when toggling scanner
     setScanning(prev => !prev);
     setError(null);
     setSuccessMessage(null);
     setSessionVerified(false);
+    setCameraPermissionDenied(false);
+    
     if (!scanning) {
       setRetryCount(0);
     }
@@ -486,13 +554,40 @@ const QRCodeScanner = () => {
           </Alert>
         )}
         
+        {cameraInitializing && scanning && !error && (
+          <Alert className="border-blue-200 bg-blue-50 text-blue-800">
+            <AlertDescription className="flex items-center">
+              <LoadingSpinner className="h-4 w-4 mr-2" />
+              Initializing camera... Please wait.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {cameraPermissionDenied && (
+          <Alert className="border-yellow-200 bg-yellow-50 text-yellow-800">
+            <AlertDescription>
+              <h4 className="font-medium">Camera permission denied</h4>
+              <p className="text-sm mt-1">Please follow these steps:</p>
+              <ol className="list-decimal text-sm ml-4 mt-1">
+                <li>Click the camera/lock icon in your browser's address bar</li>
+                <li>Select "Allow" for camera access</li>
+                <li>Refresh the page</li>
+              </ol>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         {scanning ? (
           <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-inner border border-gray-200">
             <Scanner
               onScan={handleScan}
               onError={handleError}
+              onStart={handleCameraStart}
               scanDelay={500}
-              constraints={{ facingMode: 'environment' }}
+              constraints={{ 
+                facingMode: 'environment',
+                aspectRatio: 1
+              }}
             />
             {(processing || activationInProgress) && (
               <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
@@ -535,13 +630,13 @@ const QRCodeScanner = () => {
             <span className="flex items-center gap-2">
               {scanning ? (
                 <>
-                  <X className="h-5 w-5" />
-                  Cancel Scanning
+                  <CameraOff className="h-5 w-5" />
+                  Stop Camera
                 </>
               ) : (
                 <>
-                  <QrCode className="h-5 w-5" />
-                  Start Scanning
+                  <Camera className="h-5 w-5" />
+                  Start Camera
                 </>
               )}
             </span>
