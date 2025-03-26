@@ -19,14 +19,31 @@ const Index = () => {
   const [dbConnected, setDbConnected] = useState<boolean | null>(null); // null means checking
   const [localLoading, setLocalLoading] = useState(true);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
+  const [connectionCheckTimeout, setConnectionCheckTimeout] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
     const checkConnection = async () => {
       try {
         if (isMounted) setDbConnected(null); // Set to checking
         
+        // Set a timeout to prevent getting stuck if the connection check takes too long
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.log('Database connection check timed out');
+            setConnectionCheckTimeout(true);
+            setDbConnected(false);
+            setLocalLoading(false);
+            setEmailConfirmationChecked(true);
+          }
+        }, 5000); // 5 second timeout
+        
         const connected = await checkSupabaseConnection();
+        
+        // Clear the timeout since we got a response
+        clearTimeout(timeoutId);
         
         if (!isMounted) return;
         
@@ -43,6 +60,7 @@ const Index = () => {
         setDbConnected(false);
       } finally {
         if (isMounted) {
+          clearTimeout(timeoutId); // Ensure timeout is cleared
           setLocalLoading(false);
           setEmailConfirmationChecked(true);
         }
@@ -53,6 +71,7 @@ const Index = () => {
     
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId); // Clean up timeout on unmount
     };
   }, []);
 
@@ -78,9 +97,11 @@ const Index = () => {
     console.log('Auth loading state:', loading);
     console.log('Local loading state:', localLoading);
     console.log('Database connection state:', dbConnected);
-  }, [loading, localLoading, dbConnected]);
+    console.log('Connection timeout state:', connectionCheckTimeout);
+  }, [loading, localLoading, dbConnected, connectionCheckTimeout]);
 
-  if (loading && !user) {
+  // If we're still in auth loading state but not in connection timeout, show the spinner
+  if (loading && !connectionCheckTimeout && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />
@@ -90,7 +111,8 @@ const Index = () => {
 
   if (!user) {
     // Only show disconnected status, hide the connected status
-    const connectionStatus = dbConnected === null ? 'checking' : dbConnected ? null : 'disconnected';
+    const connectionStatus = dbConnected === null && !connectionCheckTimeout ? 'checking' : 
+                            !dbConnected ? 'disconnected' : null;
     
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
@@ -111,7 +133,12 @@ const Index = () => {
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold mb-2">Attendify</h1>
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
-                {!dbConnected && dbConnected !== null && (
+                {connectionCheckTimeout && (
+                  <p className="text-amber-600 mt-2">
+                    Database connection check timed out. You can still attempt to use the app.
+                  </p>
+                )}
+                {!dbConnected && dbConnected !== null && !connectionCheckTimeout && (
                   <p className="text-destructive mt-2">
                     Database connection error. Please check your configuration or try again later.
                   </p>

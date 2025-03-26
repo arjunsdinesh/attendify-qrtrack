@@ -1,325 +1,55 @@
-import { supabase as supabaseClient, checkConnection } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { type PostgrestError } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
-// Re-export the Supabase client
-export const supabase = supabaseClient;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Cache environment variables to avoid repeated lookups
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ushmvfuczmqjjtwnqebp.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ';
-
-// Validate config
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.');
+if (!supabaseUrl) {
+  console.error('VITE_SUPABASE_URL is not defined in .env');
+  throw new Error('Supabase URL is required');
 }
 
-export interface Profile {
-  id: string;
-  email: string;
-  full_name: string;
-  role: 'student' | 'teacher';
-  created_at: string;
-  updated_at: string;
+if (!supabaseAnonKey) {
+  console.error('VITE_SUPABASE_ANON_KEY is not defined in .env');
+  throw new Error('Supabase Anon Key is required');
 }
 
-export interface StudentProfile {
-  id: string;
-  register_number: string | null;
-  roll_number: string | null;
-  department: string | null;
-  semester: number | null;
-  class_id: string | null;
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export interface TeacherProfile {
-  id: string;
-  employee_id: string | null;
-  department: string | null;
-  designation: string | null;
-}
-
-export interface Class {
-  id: string;
-  name: string;
-  course_code: string;
-  department: string;
-  semester: number;
-  teacher_id: string;
-  created_at: string;
-}
-
-export interface AttendanceSession {
-  id: string;
-  class_id: string;
-  date: string;
-  start_time: string;
-  end_time: string | null;
-  created_by: string;
-  qr_secret: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-export interface AttendanceRecord {
-  id: string;
-  session_id: string;
-  student_id: string;
-  timestamp: string;
-  created_at: string;
-}
-
-// Error handler for Supabase operations
-export const handleSupabaseError = (error: PostgrestError | null, customMessage?: string) => {
-  if (error) {
-    console.error('Supabase error:', error);
-    toast.error(customMessage || error.message || 'An error occurred');
-  }
-  return null;
-};
-
-// Helper function to check if a user is authenticated
-export const isAuthenticated = async () => {
+// Add timeout to the connection check
+export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    const { data } = await supabase.auth.getSession();
-    return !!data.session;
-  } catch (error) {
-    console.error('Authentication check failed:', error);
-    return false;
-  }
-};
-
-// Helper function to get the current user's profile with improved error handling
-export const getCurrentUserProfile = async (): Promise<Profile | null> => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      console.log('No authenticated user found');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (error) {
-      handleSupabaseError(error, 'Failed to fetch user profile');
-      return null;
-    }
-
-    console.log('Retrieved user profile:', data);
-    return data as unknown as Profile;
-  } catch (error) {
-    console.error('Failed to get current user profile:', error);
-    handleSupabaseError(error as PostgrestError, 'Failed to get current user profile');
-    return null;
-  }
-};
-
-// Helper function to check if attendance session exists and is active
-export const checkAttendanceSession = async (sessionId: string): Promise<{exists: boolean, isActive: boolean}> => {
-  try {
-    if (!sessionId) {
-      console.error('No session ID provided to checkAttendanceSession');
-      return { exists: false, isActive: false };
-    }
-    
-    const { data, error } = await supabase
-      .from('attendance_sessions')
-      .select('is_active')
-      .eq('id', sessionId)
-      .maybeSingle();
-      
-    if (error) {
-      console.error('Error checking attendance session:', error);
-      return { exists: false, isActive: false };
-    }
-    
-    if (!data) {
-      console.log('Attendance session not found:', sessionId);
-      return { exists: false, isActive: false };
-    }
-    
-    return { exists: true, isActive: !!data.is_active };
-  } catch (error) {
-    console.error('Exception in checkAttendanceSession:', error);
-    return { exists: false, isActive: false };
-  }
-};
-
-// Helper function to activate an attendance session
-export const activateAttendanceSession = async (sessionId: string): Promise<boolean> => {
-  try {
-    if (!sessionId) return false;
-    
-    const { data, error } = await supabase
-      .from('attendance_sessions')
-      .update({ is_active: true, end_time: null })
-      .eq('id', sessionId)
-      .select('is_active')
-      .single();
-      
-    if (error) {
-      console.error('Error activating attendance session:', error);
-      return false;
-    }
-    
-    return !!data?.is_active;
-  } catch (error) {
-    console.error('Exception in activateAttendanceSession:', error);
-    return false;
-  }
-};
-
-// Helper function to get a student's detailed profile
-export const getStudentProfile = async (studentId: string): Promise<{profile: Profile, studentProfile: StudentProfile} | null> => {
-  try {
-    // Get the base profile
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', studentId)
-      .maybeSingle();
-      
-    if (profileError) throw profileError;
-    
-    // Get the student-specific profile
-    const { data: studentData, error: studentError } = await supabase
-      .from('student_profiles')
-      .select('*')
-      .eq('id', studentId)
-      .maybeSingle();
-      
-    if (studentError) throw studentError;
-    
-    if (!profileData || !studentData) {
-      return null;
-    }
-    
-    return {
-      profile: profileData as unknown as Profile,
-      studentProfile: studentData as unknown as StudentProfile
-    };
-  } catch (error) {
-    console.error('Failed to get student profile:', error);
-    handleSupabaseError(error as PostgrestError, 'Failed to get student profile');
-    return null;
-  }
-};
-
-// Function to get attendance records with student details
-export const getAttendanceRecordsWithStudentDetails = async (sessionId: string) => {
-  try {
-    const { data, error } = await supabase
-      .from('attendance_records')
-      .select(`
-        id,
-        timestamp,
-        student:student_id(
-          id,
-          full_name,
-          student_profiles(*)
-        )
-      `)
-      .eq('session_id', sessionId)
-      .order('timestamp', { ascending: true });
-      
-    if (error) throw error;
-    
-    return data;
-  } catch (error) {
-    console.error('Failed to get attendance records:', error);
-    handleSupabaseError(error as PostgrestError, 'Failed to get attendance records');
-    return [];
-  }
-};
-
-// Enhanced connection check with improved error handling and caching
-let connectionStatus: 'unknown' | 'connected' | 'disconnected' = 'unknown';
-let lastCheckTime = 0;
-const CONNECTION_CACHE_TIME = 30000; // 30 seconds
-
-export const checkSupabaseConnection = async (forceCheck = false): Promise<boolean> => {
-  try {
-    const now = Date.now();
-    
-    // Return cached result if we checked recently (except when forced)
-    if (!forceCheck && connectionStatus !== 'unknown' && (now - lastCheckTime) < CONNECTION_CACHE_TIME) {
-      console.log(`Using cached connection status: ${connectionStatus}`);
-      return connectionStatus === 'connected';
-    }
-    
     console.log('Performing database connection check...');
     
-    // Implement a more robust connection check with retry logic
-    const maxRetries = 3;
-    let retries = 0;
+    // Create a promise that rejects after a timeout
+    const timeout = (ms: number) => new Promise((_, reject) => 
+      setTimeout(() => reject(new Error(`Connection attempt timed out after ${ms/1000} seconds`)), ms)
+    );
     
-    while (retries <= maxRetries) {
+    // Try up to 4 times with increasing timeouts
+    for (let attempt = 1; attempt <= 4; attempt++) {
       try {
-        console.log(`Connection attempt ${retries + 1} of ${maxRetries + 1}`);
+        console.log(`Connection attempt ${attempt} of 4`);
+        // Race between the connection and timeout
+        await Promise.race([
+          supabase.from('profiles').select('count', { count: 'exact', head: true }),
+          timeout(5000) // 5 second timeout
+        ]);
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-          console.log('Connection attempt timed out after 5 seconds');
-        }, 5000);
-        
-        // Simple query to verify connection
-        const { error } = await supabase
-          .from('profiles')
-          .select('count', { count: 'exact', head: true })
-          .limit(1)
-          .abortSignal(controller.signal);
-          
-        clearTimeout(timeoutId);
-        
-        if (error) {
-          if (error.code === 'PGRST116') {
-            // This is usually an auth error, not a connection error
-            console.log('Connected but returned auth error, treating as connected');
-            connectionStatus = 'connected';
-            lastCheckTime = now;
-            return true;
-          }
-          
-          console.warn(`Connection error: ${error.message}`);
-          retries++;
-          
-          if (retries <= maxRetries) {
-            const delay = 1000 * Math.pow(2, retries - 1);
-            console.log(`Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        } else {
-          console.log('Connection successful');
-          connectionStatus = 'connected';
-          lastCheckTime = now;
-          return true;
+        // If we get here, the connection was successful
+        console.log('Database connection successful');
+        return true;
+      } catch (error: any) {
+        console.log(error.message);
+        if (attempt < 4 && error.message.includes('timed out')) {
+          continue; // Try again on timeout
         }
-      } catch (innerError: any) {
-        console.error(`Connection attempt ${retries + 1} error:`, innerError);
-        retries++;
-        
-        if (retries <= maxRetries) {
-          const delay = 1000 * Math.pow(2, retries - 1);
-          console.log(`Retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
+        throw error; // Other errors or final timeout
       }
     }
     
-    console.error('All connection attempts failed');
-    connectionStatus = 'disconnected';
-    lastCheckTime = now;
-    return false;
+    return false; // Should not reach here but TypeScript needs it
   } catch (error) {
-    console.error('Supabase connection check failed:', error);
-    connectionStatus = 'disconnected';
-    lastCheckTime = Date.now();
+    console.error('Database connection failed:', error);
     return false;
   }
 };
