@@ -43,7 +43,7 @@ export interface TeacherProfile {
 }
 
 // Add timeout to the connection check
-export const checkSupabaseConnection = async (forceCheck = false): Promise<boolean> => {
+export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('Performing database connection check...');
     

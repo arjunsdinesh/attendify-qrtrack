@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -35,16 +36,18 @@ interface SessionDetails {
   classes: SessionClass;
 }
 
+interface StudentProfile {
+  register_number?: string;
+  roll_number?: string;
+  department?: string;
+  semester?: number;
+}
+
 interface StudentData {
   id: string;
   full_name: string;
   email: string;
-  student_profiles: {
-    register_number?: string;
-    roll_number?: string;
-    department?: string;
-    semester?: number;
-  }[];
+  student_profiles: StudentProfile[];
 }
 
 interface AttendanceRecord {
@@ -152,7 +155,16 @@ const AttendanceRecords = () => {
       
       if (sessionError) throw sessionError;
       
-      setSessionDetails(sessionData);
+      if (sessionData && sessionData.classes) {
+        setSessionDetails({
+          id: sessionData.id,
+          date: sessionData.date,
+          start_time: sessionData.start_time,
+          end_time: sessionData.end_time,
+          is_active: sessionData.is_active,
+          classes: sessionData.classes as SessionClass
+        });
+      }
       
       // Then get the attendance records with detailed student info
       const { data, error } = await supabase
@@ -181,7 +193,20 @@ const AttendanceRecords = () => {
       }
       
       console.log('Fetched records:', data);
-      setRecords(data || []);
+      
+      // Properly transform the data to match our AttendanceRecord interface
+      const transformedRecords: AttendanceRecord[] = data?.map(record => ({
+        id: record.id,
+        timestamp: record.timestamp,
+        student: {
+          id: record.student.id,
+          full_name: record.student.full_name,
+          email: record.student.email,
+          student_profiles: record.student.student_profiles
+        }
+      })) || [];
+      
+      setRecords(transformedRecords);
     } catch (error: any) {
       console.error('Error fetching attendance records:', error);
       toast.error('Failed to load attendance records');
