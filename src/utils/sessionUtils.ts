@@ -140,7 +140,7 @@ export const verifyAttendanceSession = async (
     console.log('Session verification result:', data);
     
     // If session exists but is not active and we want to activate it
-    if (forceActivate) {
+    if (forceActivate && data && !data.is_active) {
       console.log('Attempting to ensure session is active:', sessionId);
       
       let { data: updateData, error: updateError } = await activateSession(sessionId);
@@ -151,7 +151,7 @@ export const verifyAttendanceSession = async (
         // but warn that activation failed
         return { 
           exists: true, 
-          isActive: !!data.is_active,
+          isActive: false,
           data,
           error: 'Failed to activate session: ' + updateError.message
         };

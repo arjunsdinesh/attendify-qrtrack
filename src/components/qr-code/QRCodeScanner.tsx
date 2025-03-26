@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -314,7 +315,8 @@ const QRCodeScanner = () => {
           setRecentlyMarked(true);
           
           let classInfo = '';
-          if (sessionData.classes) {
+          if (sessionData && sessionData.classes) {
+            // Handle different possible structures of the classes data
             if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
               classInfo = ` for ${sessionData.classes.name}`;
             }
