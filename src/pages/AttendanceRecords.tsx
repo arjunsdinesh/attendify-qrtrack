@@ -182,16 +182,16 @@ const AttendanceRecords = () => {
       console.log('Fetched records:', data);
       
       // Properly transform the data to match our AttendanceRecord interface
-      const transformedRecords: AttendanceRecord[] = data.map(record => ({
-        id: record.id,
-        timestamp: record.timestamp,
-        student: {
-          id: record.student.id,
-          full_name: record.student.full_name,
-          email: record.student.email,
-          student_profiles: record.student.student_profiles
-        }
-      }));
+      const transformedRecords: AttendanceRecord[] = data.map(record => {
+        // Log the structure to debug
+        console.log('Record student data:', record.student);
+        
+        return {
+          id: record.id,
+          timestamp: record.timestamp,
+          student: record.student as StudentData // Cast directly to StudentData
+        };
+      });
       
       setRecords(transformedRecords);
     } catch (error: any) {
