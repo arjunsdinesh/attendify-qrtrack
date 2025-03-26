@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 
 /**
@@ -75,8 +74,12 @@ export const verifyAttendanceSession = async (
         
       if (fullError || !fullData) {
         console.log('Got basic session but failed to get full details, proceeding with limited data');
-        // We'll proceed with the basic data we have
-        data = retryData;
+        // We'll proceed with the basic data we have, but need to ensure it matches the expected shape
+        data = {
+          is_active: retryData.is_active,
+          class_id: '', // Provide default values for required properties
+          classes: { name: 'Unknown Class' }
+        };
       } else {
         data = fullData;
       }
