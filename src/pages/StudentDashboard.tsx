@@ -1,20 +1,61 @@
+
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import ClassList from '@/components/classes/ClassList';
 import { SessionActivator } from '@/components/debug/SessionActivator';
+import { supabase } from '@/utils/supabase';
+import { toast } from 'sonner';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const [classes, setClasses] = useState<any[]>([]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [classesLoading, setClassesLoading] = useState(true);
   
   useEffect(() => {
     if (!loading && (!user || user.role !== 'student')) {
       navigate('/');
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      fetchClasses();
+    }
+  }, [user]);
+
+  const fetchClasses = async () => {
+    try {
+      setClassesLoading(true);
+      const { data, error } = await supabase
+        .from('classes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching classes:', error);
+        toast.error('Failed to load classes');
+      } else {
+        setClasses(data || []);
+      }
+    } catch (error) {
+      console.error('Exception fetching classes:', error);
+      toast.error('An error occurred while loading classes');
+    } finally {
+      setClassesLoading(false);
+    }
+  };
+
+  const handleCreateClass = async (className: string) => {
+    // Students typically don't create classes, but we need this function
+    // to satisfy the props interface
+    toast.info('Students cannot create classes');
+    return Promise.resolve();
+  };
 
   if (loading || !user) {
     return (
@@ -54,7 +95,12 @@ const StudentDashboard = () => {
           </Button>
         </div>
         
-        <ClassList role="student" />
+        <ClassList 
+          classes={classes} 
+          createDialogOpen={createDialogOpen}
+          setCreateDialogOpen={setCreateDialogOpen}
+          onCreateClass={handleCreateClass}
+        />
       </div>
     </DashboardLayout>
   );
