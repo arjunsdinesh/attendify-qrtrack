@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 
 /**
@@ -54,7 +55,7 @@ async function fetchSessionExtendedData(sessionId: string): Promise<{
  * Most reliable method to activate a session using the RPC function
  * This bypasses any JS->PostgreSQL type conversion issues
  */
-async function activateSessionViaRPC(sessionId: string): Promise<boolean> {
+export async function activateSessionViaRPC(sessionId: string): Promise<boolean> {
   try {
     console.log('Activating session via RPC function:', sessionId);
     const { data, error } = await supabase.rpc('force_activate_session', {
