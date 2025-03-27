@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [lastActivationTime, setLastActivationTime] = useState<number>(Date.now());
   const [lastQRGeneration, setLastQRGeneration] = useState<number>(Date.now());
   const [sessionStatusCheck, setSessionStatusCheck] = useState<boolean>(false);
+  const [qrRefreshPending, setQrRefreshPending] = useState<boolean>(false);
 
   const forceActivateSession = useCallback(async () => {
     try {
@@ -123,11 +125,18 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   }, [sessionId, sessionActive, lastActivationTime]);
 
   const generateQRData = useCallback(async () => {
+    // Only generate a new QR code if it's time for a refresh or if we're starting fresh
     const now = Date.now();
-    if (now - lastQRGeneration < 25000 && qrValue) {
-      console.log('QR refresh throttled, too soon since last generation');
+    
+    // Strict enforcement: must be at least 30 seconds since last generation unless no QR exists
+    if (qrValue && now - lastQRGeneration < 29500) {
+      console.log('QR refresh prevented - not yet time for a 30-second refresh');
+      setQrRefreshPending(true);
       return;
     }
+    
+    // Clear the pending flag since we're generating now
+    setQrRefreshPending(false);
     
     if (refreshingQR) {
       console.log('Already refreshing QR, skipping this request');
@@ -252,15 +261,24 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   }, [sessionId, forceActivateSession, sessionStatusCheck]);
 
   useEffect(() => {
+    // Initial QR generation
     generateQRData();
     
+    // Timer for countdown and QR refresh at exact 30-second intervals
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
+          // Only generate a new QR when the timer hits exactly 0
           console.log('Timer hit 0, generating new QR code');
           generateQRData();
           return 30;
         }
+        
+        // When we're at 1 second remaining, mark that a refresh will be needed soon
+        if (prev === 1) {
+          setQrRefreshPending(true);
+        }
+        
         return prev - 1;
       });
     }, 1000);
@@ -335,11 +353,16 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       </p>
       <Button 
         onClick={() => {
-          setTimeLeft(30);
-          generateQRData();
+          // Only allow manual refresh if there isn't a pending automatic refresh
+          if (!qrRefreshPending) {
+            setTimeLeft(30);
+            generateQRData();
+          } else {
+            toast.info("QR code will refresh automatically in a moment");
+          }
         }} 
         className="w-full bg-green-600 hover:bg-green-700 mt-2"
-        disabled={generating || refreshingQR}
+        disabled={generating || refreshingQR || qrRefreshPending}
       >
         {generating ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
         Refresh QR Code
