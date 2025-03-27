@@ -22,16 +22,6 @@ const ScanQR = () => {
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
   const connectionCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkConnectionRetryCount = useRef<number>(0);
-  // Track whether we've shown a notification already
-  const hasShownToastRef = useRef<{
-    connection: boolean;
-    noSessions: boolean;
-    sessionFound: boolean;
-  }>({
-    connection: false,
-    noSessions: false,
-    sessionFound: false,
-  });
 
   // Check if any active sessions exist
   const checkForActiveSessions = useCallback(async () => {
@@ -80,9 +70,8 @@ const ScanQR = () => {
       if (!isConnected) {
         console.error('Failed to connect to database');
         
-        if (showToasts && !hasShownToastRef.current.connection) {
+        if (showToasts) {
           toast.error('Could not connect to the database. Check your internet connection.');
-          hasShownToastRef.current.connection = true;
         }
         
         // Increase retry count and schedule a retry with exponential backoff
@@ -102,21 +91,13 @@ const ScanQR = () => {
         // Check for active sessions
         const hasActiveSessions = await checkForActiveSessions();
         
-        // Only show toasts if explicitly requested AND we haven't shown them yet
         if (showToasts) {
-          if (hasActiveSessions && !hasShownToastRef.current.sessionFound) {
+          if (hasActiveSessions) {
             toast.success('Connected to attendance system. Active sessions available.');
-            hasShownToastRef.current.sessionFound = true;
-            hasShownToastRef.current.noSessions = false; // Reset this flag
-          } else if (!hasActiveSessions && !hasShownToastRef.current.noSessions) {
+          } else {
             toast.info('Connected to attendance system. No active sessions detected.');
-            hasShownToastRef.current.noSessions = true;
-            hasShownToastRef.current.sessionFound = false; // Reset this flag
           }
         }
-        
-        // If connection is restored, reset the connection toast flag
-        hasShownToastRef.current.connection = false;
         
         return true;
       }
@@ -124,9 +105,8 @@ const ScanQR = () => {
       console.error('Error checking connection:', error);
       setConnectionStatus(false);
       
-      if (showToasts && !hasShownToastRef.current.connection) {
+      if (showToasts) {
         toast.error('Connection error. Please check your internet and try again.');
-        hasShownToastRef.current.connection = true;
       }
       
       // Schedule retry
@@ -150,15 +130,14 @@ const ScanQR = () => {
   
   // Initialize connection check and periodic scanner reset
   useEffect(() => {
-    // Initial check on component mount
-    checkConnection(true);
+    checkConnection();
     
-    // Set up periodic connection checks (silent)
+    // Set up periodic connection checks
     const connectionPingInterval = setInterval(() => {
       checkConnection(false); // Silent check
     }, 30000); // Check every 30 seconds
     
-    // Also check for active sessions periodically (silent)
+    // Also check for active sessions periodically
     const sessionCheckInterval = setInterval(() => {
       if (connectionStatus) {
         checkForActiveSessions();
@@ -177,39 +156,6 @@ const ScanQR = () => {
       clearInterval(resetInterval);
     };
   }, [resetScanner, checkConnection, checkForActiveSessions, connectionStatus]);
-  
-  // Handle status changes - reset toast flags when appropriate
-  useEffect(() => {
-    // When connection status changes, allow relevant toasts again
-    if (connectionStatus === true) {
-      hasShownToastRef.current.connection = false;
-    } else if (connectionStatus === false) {
-      hasShownToastRef.current.sessionFound = false;
-      hasShownToastRef.current.noSessions = false;
-    }
-  }, [connectionStatus]);
-
-  // Handle session existence changes - reset toast flags when appropriate
-  useEffect(() => {
-    if (sessionExists === true) {
-      hasShownToastRef.current.noSessions = false;
-    } else if (sessionExists === false) {
-      hasShownToastRef.current.sessionFound = false;
-    }
-  }, [sessionExists]);
-  
-  // Function to manually check connection with user feedback
-  const manualConnectionCheck = useCallback(() => {
-    // Reset toast flags to allow notifications
-    hasShownToastRef.current = {
-      connection: false,
-      noSessions: false,
-      sessionFound: false
-    };
-    
-    checkConnection(true);
-    checkForActiveSessions();
-  }, [checkConnection, checkForActiveSessions]);
   
   // Redirect non-students
   useEffect(() => {
@@ -266,7 +212,7 @@ const ScanQR = () => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={manualConnectionCheck}
+                  onClick={() => checkConnection(true)}
                   disabled={isCheckingConnection}
                 >
                   {isCheckingConnection ? <LoadingSpinner className="h-4 w-4" /> : 'Retry'}
@@ -306,7 +252,10 @@ const ScanQR = () => {
             </Button>
             
             <Button
-              onClick={manualConnectionCheck}
+              onClick={() => {
+                checkConnection(true);
+                checkForActiveSessions();
+              }}
               variant="secondary"
               size="sm"
               className="flex-1"
