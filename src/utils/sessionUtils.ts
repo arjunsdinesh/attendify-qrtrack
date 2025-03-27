@@ -79,10 +79,11 @@ async function persistSessionActivation(sessionId: string, maxAttempts = 3): Pro
   
   while (attempts < maxAttempts && !success) {
     try {
+      // Use explicit casting to make TypeScript happy
       const { data, error } = await supabase
         .from('attendance_sessions')
         .update({ 
-          is_active: true, 
+          is_active: true as any, 
           end_time: null 
         })
         .eq('id', sessionId)
@@ -210,10 +211,10 @@ export const verifyAttendanceSession = async (
       if (!activated) {
         console.error('Failed to activate session after multiple attempts');
         
-        // Last ditch effort - try one more direct update
+        // Last ditch effort - try one more direct update with boolean casting
         const { error: finalError } = await supabase
           .from('attendance_sessions')
-          .update({ is_active: true })
+          .update({ is_active: true as any })
           .eq('id', sessionId);
           
         if (finalError) {

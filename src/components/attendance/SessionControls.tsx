@@ -11,7 +11,6 @@ interface SessionControlsProps {
   userId: string;
 }
 
-// Define the expected shape of classes data from Supabase
 interface ClassData {
   name: string;
   [key: string]: any;
@@ -30,14 +29,12 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   const [isLoadingClasses, setIsLoadingClasses] = useState<boolean>(false);
   const [checkingActiveSession, setCheckingActiveSession] = useState<boolean>(true);
 
-  // Function to attempt to activate a session by its ID
   const checkForActiveSession = async () => {
     if (!userId) return;
       
     try {
       setCheckingActiveSession(true);
       
-      // Check if the teacher has any active sessions
       const { data, error } = await supabase
         .from('attendance_sessions')
         .select('id, class_id, classes(name)')
@@ -47,23 +44,18 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       if (error) throw error;
       
-      // If an active session exists, restore it
       if (data) {
         console.log('Found active session:', data);
         setSessionId(data?.id);
         setClassId(data?.class_id);
         
-        // Extract class name - safely handling the type
         if (data?.classes) {
           let classNameValue = 'Unknown Class';
           
-          // Handle case where it might be an array due to Supabase join
           if (Array.isArray(data.classes)) {
             const firstClass = data.classes[0] as ClassData | undefined;
             classNameValue = firstClass?.name || 'Unknown Class';
-          } 
-          // Handle case where it's a single object
-          else if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
+          } else if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
             classNameValue = (data.classes as ClassData).name;
           }
           
@@ -74,36 +66,33 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setActive(true);
 
-        // Force activate the session to ensure it's truly active
         const { error: activateError } = await supabase
           .from('attendance_sessions')
           .update({ 
             is_active: true as any,
             end_time: null 
-          } as any)
+          })
           .eq('id', data.id as any);
         
-      if (activateError) {
-        console.error('Error ensuring session activation:', activateError);
+        if (activateError) {
+          console.error('Error ensuring session activation:', activateError);
+        } else {
+          console.log('Session activation reinforced');
+        }
       } else {
-        console.log('Session activation reinforced');
+        console.log('No active sessions found');
       }
-    } else {
-      console.log('No active sessions found');
+    } catch (error: any) {
+      console.error('Error checking active sessions:', error);
+    } finally {
+      setCheckingActiveSession(false);
     }
-  } catch (error: any) {
-    console.error('Error checking active sessions:', error);
-  } finally {
-    setCheckingActiveSession(false);
-  }
-};
+  };
 
-  // Check for an active session when component mounts
   useEffect(() => {
     checkForActiveSession();
   }, [userId]);
 
-  // Fetch teacher's classes when component mounts
   useEffect(() => {
     const fetchClasses = async () => {
       if (!userId) return;
@@ -120,7 +109,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setClasses(data || []);
         
-        // If we have a preselected class ID, set the class name as well
         if (preselectedClassId && data) {
           const selectedClass = data.find(c => c.id === preselectedClassId);
           if (selectedClass) {
@@ -138,14 +126,12 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     fetchClasses();
   }, [userId, preselectedClassId]);
 
-  // Generate a cryptographically secure random secret
   const generateSecret = () => {
     const array = new Uint32Array(4);
     crypto.getRandomValues(array);
     return Array.from(array, x => x.toString(16)).join('');
   };
 
-  // Start generating QR codes - enhanced with better activation assurance
   const startQRGenerator = async (selectedClassId: string, selectedClassName: string) => {
     try {
       if (!selectedClassId) {
@@ -162,22 +148,19 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
-      // First, properly deactivate any existing active sessions for this teacher
       const { error: deactivateError } = await supabase
         .from('attendance_sessions')
         .update({ 
           is_active: false as any, 
           end_time: new Date().toISOString() 
-        } as any)
+        })
         .eq('created_by', userId as any)
         .eq('is_active', true as any);
         
       if (deactivateError) {
         console.error('Error deactivating existing sessions:', deactivateError);
-        // Continue anyway, as this is not a critical error
       }
       
-      // Generate a new secret for this session
       const secret = generateSecret();
       
       console.log('Creating new session with:', {
@@ -188,7 +171,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         is_active: true
       });
       
-      // Create a new session with is_active explicitly set to true
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
@@ -198,7 +180,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           is_active: true as any,
           start_time: new Date().toISOString(),
           date: new Date().toISOString().split('T')[0]
-        } as any)
+        })
         .select()
         .single();
       
@@ -213,7 +195,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       console.log('Session created successfully:', data);
       
-      // Double-check that the session is active with retry logic
       let isSessionActive = false;
       const maxRetries = 3;
       let retryCount = 0;
@@ -233,7 +214,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
             isSessionActive = true;
             break;
           } else {
-            // If not active, try to update it and wait briefly
             console.log(`Session not active, attempting to activate (attempt ${retryCount + 1})...`);
             const { error: updateError } = await supabase
               .from('attendance_sessions')
@@ -243,7 +223,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
             if (updateError) {
               console.error(`Error updating session status (attempt ${retryCount + 1}):`, updateError);
             }
-            // Wait before retrying
             await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
@@ -252,6 +231,17 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       if (!isSessionActive) {
         console.warn('Could not verify session as active after multiple attempts');
+        const { error: finalAttemptError } = await supabase
+          .from('attendance_sessions')
+          .update({ 
+            is_active: true as any,
+            end_time: null
+          })
+          .eq('id', data.id);
+          
+        if (finalAttemptError) {
+          console.error('Final activation attempt failed:', finalAttemptError);
+        }
       }
       
       setSessionId(data.id);
@@ -266,20 +256,18 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     }
   };
 
-  // Stop generating QR codes
   const stopQRGenerator = async () => {
     try {
       if (!sessionId) return;
       
       setIsLoading(true);
       
-      // Update the session to mark it as inactive
       const { error } = await supabase
         .from('attendance_sessions')
         .update({ 
           is_active: false, 
           end_time: new Date().toISOString() 
-        } as any)
+        })
         .eq('id', sessionId as any);
       
       if (error) throw error;
