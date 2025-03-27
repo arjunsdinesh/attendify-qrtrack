@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,9 @@ const QRCodeScanner = () => {
   const processingRef = useRef<boolean>(false);
   const scannedSessionIdRef = useRef<string | null>(null);
   const scannerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cameraInitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Setup camera initialization detection
   useEffect(() => {
     if (scanning) {
       setError(null);
@@ -35,7 +36,7 @@ const QRCodeScanner = () => {
       setCameraInitializing(true);
       
       // Set a timer to detect if camera isn't initializing
-      scannerTimerRef.current = setTimeout(() => {
+      cameraInitTimeoutRef.current = setTimeout(() => {
         if (cameraInitializing) {
           console.log('Camera initialization timeout - camera might not be working');
           setCameraInitializing(false);
@@ -44,16 +45,16 @@ const QRCodeScanner = () => {
       }, 8000); // 8 second timeout for camera initialization
     } else {
       setCameraInitializing(false);
-      if (scannerTimerRef.current) {
-        clearTimeout(scannerTimerRef.current);
-        scannerTimerRef.current = null;
+      if (cameraInitTimeoutRef.current) {
+        clearTimeout(cameraInitTimeoutRef.current);
+        cameraInitTimeoutRef.current = null;
       }
     }
     
     return () => {
-      if (scannerTimerRef.current) {
-        clearTimeout(scannerTimerRef.current);
-        scannerTimerRef.current = null;
+      if (cameraInitTimeoutRef.current) {
+        clearTimeout(cameraInitTimeoutRef.current);
+        cameraInitTimeoutRef.current = null;
       }
     };
   }, [scanning, cameraInitializing]);
@@ -321,11 +322,12 @@ const QRCodeScanner = () => {
   const handleScan = async (result: any) => {
     // Clear camera initialization state since we got a scan result
     setCameraInitializing(false);
-    if (scannerTimerRef.current) {
-      clearTimeout(scannerTimerRef.current);
-      scannerTimerRef.current = null;
+    if (cameraInitTimeoutRef.current) {
+      clearTimeout(cameraInitTimeoutRef.current);
+      cameraInitTimeoutRef.current = null;
     }
     
+    // Process scan result
     try {
       if (!result || !result.length || !result[0]?.rawValue) {
         return;
@@ -337,14 +339,6 @@ const QRCodeScanner = () => {
       
       if (lastScanned === data) return;
       setLastScanned(data);
-      
-      setProcessing(true);
-      processingRef.current = true;
-      setError(null);
-      setSuccessMessage(null);
-      setSessionVerified(false);
-      
-      console.log('Scanned QR data (raw):', data);
       
       let qrData;
       try {
@@ -451,9 +445,9 @@ const QRCodeScanner = () => {
     setCameraInitializing(false);
     
     // Clear the camera initialization timer
-    if (scannerTimerRef.current) {
-      clearTimeout(scannerTimerRef.current);
-      scannerTimerRef.current = null;
+    if (cameraInitTimeoutRef.current) {
+      clearTimeout(cameraInitTimeoutRef.current);
+      cameraInitTimeoutRef.current = null;
     }
     
     // Check if it's a permission-related error
@@ -471,17 +465,6 @@ const QRCodeScanner = () => {
     }
     
     setScanning(false);
-  };
-
-  // Callback for when the camera initializes successfully
-  const handleCameraStart = () => {
-    console.log('Camera started successfully');
-    setCameraInitializing(false);
-    setCameraPermissionDenied(false);
-    if (scannerTimerRef.current) {
-      clearTimeout(scannerTimerRef.current);
-      scannerTimerRef.current = null;
-    }
   };
 
   const toggleScanner = () => {
@@ -582,7 +565,6 @@ const QRCodeScanner = () => {
             <Scanner
               onScan={handleScan}
               onError={handleError}
-              onStart={handleCameraStart}
               scanDelay={500}
               constraints={{ 
                 facingMode: 'environment',
