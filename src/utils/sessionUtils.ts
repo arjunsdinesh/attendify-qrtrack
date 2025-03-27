@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 
 /**
@@ -79,11 +78,11 @@ async function persistSessionActivation(sessionId: string, maxAttempts = 3): Pro
   
   while (attempts < maxAttempts && !success) {
     try {
-      // Use explicit casting to make TypeScript happy
+      // Use direct update without type casting to prevent PostgreSQL type issues
       const { data, error } = await supabase
         .from('attendance_sessions')
         .update({ 
-          is_active: true as any, 
+          is_active: true, 
           end_time: null 
         })
         .eq('id', sessionId)
@@ -95,6 +94,23 @@ async function persistSessionActivation(sessionId: string, maxAttempts = 3): Pro
         success = true;
       } else {
         console.warn(`Failed to activate session on attempt ${attempts + 1}: ${error?.message}`);
+        
+        // Try using RPC if direct update failed
+        if (attempts === maxAttempts - 1) {
+          console.log('Attempting activation via RPC...');
+          const { error: rpcError } = await supabase.rpc('force_activate_session', { 
+            session_id: sessionId 
+          });
+          
+          if (!rpcError) {
+            console.log('RPC activation appears successful');
+            success = true;
+            break;
+          } else {
+            console.error('RPC activation failed:', rpcError);
+          }
+        }
+        
         attempts++;
         if (attempts < maxAttempts) {
           // Wait a bit before retrying
@@ -271,6 +287,50 @@ export const activateAttendanceSession = async (sessionId: string): Promise<bool
     return await persistSessionActivation(sessionId);
   } catch (error) {
     console.error('Exception in activateAttendanceSession:', error);
+    return false;
+  }
+};
+
+/**
+ * Direct function to forcefully update a session's status
+ * @param sessionId The ID of the attendance session to activate
+ * @returns Boolean indicating success
+ */
+export const forceSessionActivation = async (sessionId: string): Promise<boolean> => {
+  try {
+    // First try standard update
+    const { data, error } = await supabase
+      .from('attendance_sessions')
+      .update({ is_active: true, end_time: null })
+      .eq('id', sessionId)
+      .select('is_active')
+      .single();
+      
+    if (error || !data || !data.is_active) {
+      console.log('Standard update failed, trying RPC');
+      
+      // Try RPC as a fallback
+      const { error: rpcError } = await supabase
+        .rpc('force_activate_session', { session_id: sessionId });
+        
+      if (rpcError) {
+        console.error('RPC activation failed:', rpcError);
+        return false;
+      }
+      
+      // Verify the activation worked
+      const { data: verifyData } = await supabase
+        .from('attendance_sessions')
+        .select('is_active')
+        .eq('id', sessionId)
+        .maybeSingle();
+        
+      return !!verifyData?.is_active;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error in forceSessionActivation:', error);
     return false;
   }
 };

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -38,8 +39,8 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       const { data, error } = await supabase
         .from('attendance_sessions')
         .select('id, class_id, classes(name)')
-        .eq('created_by', userId as any)
-        .eq('is_active', true as any)
+        .eq('created_by', userId)
+        .eq('is_active', true)
         .maybeSingle();
       
       if (error) throw error;
@@ -66,13 +67,14 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setActive(true);
 
+        // Ensure the session is still marked as active
         const { error: activateError } = await supabase
           .from('attendance_sessions')
           .update({ 
-            is_active: true as any,
+            is_active: true,
             end_time: null 
           })
-          .eq('id', data.id as any);
+          .eq('id', data.id);
         
         if (activateError) {
           console.error('Error ensuring session activation:', activateError);
@@ -148,14 +150,15 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
+      // Deactivate any existing active sessions
       const { error: deactivateError } = await supabase
         .from('attendance_sessions')
         .update({ 
-          is_active: false as any, 
+          is_active: false, 
           end_time: new Date().toISOString() 
         })
-        .eq('created_by', userId as any)
-        .eq('is_active', true as any);
+        .eq('created_by', userId)
+        .eq('is_active', true);
         
       if (deactivateError) {
         console.error('Error deactivating existing sessions:', deactivateError);
@@ -171,13 +174,14 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         is_active: true
       });
       
+      // Create the new session with is_active explicitly set to true
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
-          created_by: userId as any,
+          created_by: userId,
           class_id: selectedClassId,
           qr_secret: secret,
-          is_active: true as any,
+          is_active: true,
           start_time: new Date().toISOString(),
           date: new Date().toISOString().split('T')[0]
         })
@@ -195,11 +199,13 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       console.log('Session created successfully:', data);
       
+      // Immediate verification and forced activation if needed
       let isSessionActive = false;
       const maxRetries = 3;
       let retryCount = 0;
       
       while (!isSessionActive && retryCount < maxRetries) {
+        // Check if the session is active
         const { data: checkData, error: checkError } = await supabase
           .from('attendance_sessions')
           .select('is_active')
@@ -214,34 +220,49 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
             isSessionActive = true;
             break;
           } else {
-            console.log(`Session not active, attempting to activate (attempt ${retryCount + 1})...`);
+            console.log(`Session not active, forcefully activating (attempt ${retryCount + 1})...`);
+            
+            // Force activate with a direct update - explicit boolean casting
             const { error: updateError } = await supabase
               .from('attendance_sessions')
-              .update({ is_active: true as any })
+              .update({ 
+                is_active: true,
+                end_time: null
+              })
               .eq('id', data.id);
               
             if (updateError) {
               console.error(`Error updating session status (attempt ${retryCount + 1}):`, updateError);
             }
-            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Wait a moment before checking again
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
         retryCount++;
       }
       
       if (!isSessionActive) {
-        console.warn('Could not verify session as active after multiple attempts');
-        const { error: finalAttemptError } = await supabase
-          .from('attendance_sessions')
-          .update({ 
-            is_active: true as any,
-            end_time: null
-          })
-          .eq('id', data.id);
+        console.warn('Could not verify session as active after multiple attempts, making final attempt');
+        
+        // Final attempt with a direct update, no casting
+        await supabase.rpc('force_activate_session', { session_id: data.id })
+          .then(({ error }) => {
+            if (error) {
+              console.error('RPC activation failed:', error);
+            } else {
+              console.log('RPC activation completed');
+            }
+          });
           
-        if (finalAttemptError) {
-          console.error('Final activation attempt failed:', finalAttemptError);
-        }
+        // Final verification
+        const { data: finalCheck } = await supabase
+          .from('attendance_sessions')
+          .select('is_active')
+          .eq('id', data.id)
+          .maybeSingle();
+          
+        console.log('Final activation status check:', finalCheck?.is_active);
       }
       
       setSessionId(data.id);

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
@@ -6,6 +5,7 @@ import { LoadingSpinner } from '@/components/ui-components';
 import { supabase } from '@/utils/supabase';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { forceSessionActivation } from '@/utils/sessionUtils';
 
 interface QRGeneratorProps {
   sessionId: string;
@@ -56,7 +56,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       const { data, error } = await supabase
         .from('attendance_sessions')
         .update({ 
-          is_active: true as any,
+          is_active: true,
           end_time: null 
         })
         .eq('id', sessionId)
@@ -65,43 +65,32 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         
       if (error) {
         console.error('Error activating session:', error);
-        setSessionActive(false);
-        setError('Failed to activate session');
-        return false;
+        
+        const activated = await forceSessionActivation(sessionId);
+        if (!activated) {
+          setSessionActive(false);
+          setError('Failed to activate session');
+          return false;
+        } else {
+          console.log('Force activation function succeeded');
+          setLastActivationTime(now);
+          setSessionActive(true);
+          setError(null);
+          return true;
+        }
       }
       
       if (!data || !data.is_active) {
         console.error('Session activation did not work, data returned:', data);
         
-        const { error: retryError } = await supabase
-          .from('attendance_sessions')
-          .update({ 
-            is_active: true as any,
-            end_time: null 
-          })
-          .eq('id', sessionId);
-          
-        if (retryError) {
-          console.error('Retry activation failed:', retryError);
+        const activated = await forceSessionActivation(sessionId);
+        if (!activated) {
           setSessionActive(false);
           setError('Failed to activate session after multiple attempts');
           return false;
         }
         
-        const { data: verifyData, error: verifyError } = await supabase
-          .from('attendance_sessions')
-          .select('is_active')
-          .eq('id', sessionId)
-          .single();
-          
-        if (verifyError || !verifyData || !verifyData.is_active) {
-          console.error('Verification failed after retry:', verifyError || 'Session not active');
-          setSessionActive(false);
-          setError('Failed to activate session - server did not confirm activation');
-          return false;
-        }
-        
-        console.log('Session activated successfully after retry');
+        console.log('Session activated successfully using force function');
         setLastActivationTime(now);
         setSessionActive(true);
         setError(null);
@@ -125,17 +114,14 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   }, [sessionId, sessionActive, lastActivationTime]);
 
   const generateQRData = useCallback(async () => {
-    // Only generate a new QR code if it's time for a refresh or if we're starting fresh
     const now = Date.now();
     
-    // Strict enforcement: must be at least 30 seconds since last generation unless no QR exists
     if (qrValue && now - lastQRGeneration < 29500) {
       console.log('QR refresh prevented - not yet time for a 30-second refresh');
       setQrRefreshPending(true);
       return;
     }
     
-    // Clear the pending flag since we're generating now
     setQrRefreshPending(false);
     
     if (refreshingQR) {
@@ -261,20 +247,16 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   }, [sessionId, forceActivateSession, sessionStatusCheck]);
 
   useEffect(() => {
-    // Initial QR generation
     generateQRData();
     
-    // Timer for countdown and QR refresh at exact 30-second intervals
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Only generate a new QR when the timer hits exactly 0
           console.log('Timer hit 0, generating new QR code');
           generateQRData();
           return 30;
         }
         
-        // When we're at 1 second remaining, mark that a refresh will be needed soon
         if (prev === 1) {
           setQrRefreshPending(true);
         }
@@ -353,7 +335,6 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       </p>
       <Button 
         onClick={() => {
-          // Only allow manual refresh if there isn't a pending automatic refresh
           if (!qrRefreshPending) {
             setTimeLeft(30);
             generateQRData();
