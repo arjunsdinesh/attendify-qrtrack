@@ -5,7 +5,7 @@ import { LoadingSpinner } from '@/components/ui-components';
 import { supabase } from '@/utils/supabase';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { forceSessionActivation } from '@/utils/sessionUtils';
+import { forceSessionActivation, activateSessionViaRPC } from '@/utils/sessionUtils';
 
 interface QRGeneratorProps {
   sessionId: string;
@@ -53,51 +53,38 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         return false;
       }
       
-      const { data, error } = await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true,
-          end_time: null 
-        })
-        .eq('id', sessionId)
-        .select('is_active')
-        .single();
+      const activated = await supabase.rpc('force_activate_session', { 
+        session_id: sessionId 
+      });
+      
+      if (activated.error) {
+        console.error('RPC activation error:', activated.error);
         
-      if (error) {
-        console.error('Error activating session:', error);
-        
-        const activated = await forceSessionActivation(sessionId);
-        if (!activated) {
+        const { data, error } = await supabase
+          .from('attendance_sessions')
+          .update({ 
+            is_active: true,
+            end_time: null 
+          })
+          .eq('id', sessionId)
+          .select('is_active')
+          .single();
+          
+        if (error || !data || !data.is_active) {
+          console.error('Standard update failed after RPC failure:', error);
           setSessionActive(false);
           setError('Failed to activate session');
           return false;
-        } else {
-          console.log('Force activation function succeeded');
-          setLastActivationTime(now);
-          setSessionActive(true);
-          setError(null);
-          return true;
-        }
-      }
-      
-      if (!data || !data.is_active) {
-        console.error('Session activation did not work, data returned:', data);
-        
-        const activated = await forceSessionActivation(sessionId);
-        if (!activated) {
-          setSessionActive(false);
-          setError('Failed to activate session after multiple attempts');
-          return false;
         }
         
-        console.log('Session activated successfully using force function');
+        console.log('Standard activation succeeded after RPC failure');
         setLastActivationTime(now);
         setSessionActive(true);
         setError(null);
         return true;
       }
       
-      console.log('Session activated successfully, confirmation:', data);
+      console.log('RPC activation successful:', activated.data);
       setLastActivationTime(now);
       setSessionActive(true);
       setError(null);
@@ -162,7 +149,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         setError('Session not found. Please create a new session.');
         return;
       } else if (!sessionData.is_active) {
-        console.log('Session exists but is not active, activating...');
+        console.log('Session exists but is not active, activating using RPC...');
         await forceActivateSession();
       } else {
         console.log('Session already active:', sessionData);
@@ -203,7 +190,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     let pingInterval: ReturnType<typeof setInterval>;
     
     if (sessionId) {
-      console.log('Setting up session keep-alive ping');
+      console.log('Setting up session keep-alive ping with RPC support');
       
       pingInterval = setInterval(async () => {
         try {
@@ -214,26 +201,35 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
           
           console.log('Sending keep-alive ping for session:', sessionId);
           
-          const { data, error } = await supabase
-            .from('attendance_sessions')
-            .update({ 
-              is_active: true as any, 
-              end_time: null 
-            })
-            .eq('id', sessionId)
-            .select('is_active')
-            .single();
-            
+          const { error } = await supabase.rpc('force_activate_session', { 
+            session_id: sessionId 
+          });
+          
           if (error) {
-            console.error('Error in keep-alive ping:', error);
-            await forceActivateSession();
-          } else if (data && data.is_active) {
-            console.log('Keep-alive ping successful, session confirmed active');
+            console.error('Error in keep-alive RPC ping:', error);
+            
+            const { data, error: updateError } = await supabase
+              .from('attendance_sessions')
+              .update({ 
+                is_active: true, 
+                end_time: null 
+              })
+              .eq('id', sessionId)
+              .select('is_active')
+              .single();
+              
+            if (updateError || !data || !data.is_active) {
+              console.error('Keep-alive standard update failed:', updateError);
+              await forceActivateSession();
+            } else {
+              console.log('Keep-alive standard update successful');
+              setSessionActive(true);
+              setError(null);
+            }
+          } else {
+            console.log('Keep-alive RPC ping successful');
             setSessionActive(true);
             setError(null);
-          } else {
-            console.warn('Keep-alive ping successful but session not active');
-            await forceActivateSession();
           }
         } catch (error) {
           console.error('Exception in keep-alive ping:', error);

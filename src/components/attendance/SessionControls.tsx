@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -7,6 +6,7 @@ import { QRGenerator } from './QRGenerator';
 import { SessionForm } from './SessionForm';
 import { useSearchParams } from 'react-router-dom';
 import { LoadingSpinner } from '@/components/ui-components';
+import { forceSessionActivation } from '@/utils/sessionUtils';
 
 interface SessionControlsProps {
   userId: string;
@@ -67,19 +67,30 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setActive(true);
 
-        // Ensure the session is still marked as active
-        const { error: activateError } = await supabase
-          .from('attendance_sessions')
-          .update({ 
-            is_active: true,
-            end_time: null 
-          })
-          .eq('id', data.id);
+        // Use RPC to ensure the session stays active
+        const { error: rpcError } = await supabase.rpc('force_activate_session', {
+          session_id: data.id
+        });
         
-        if (activateError) {
-          console.error('Error ensuring session activation:', activateError);
+        if (rpcError) {
+          console.error('Error ensuring session activation via RPC:', rpcError);
+          
+          // Fall back to standard update if RPC fails
+          const { error: activateError } = await supabase
+            .from('attendance_sessions')
+            .update({ 
+              is_active: true,
+              end_time: null 
+            })
+            .eq('id', data.id);
+          
+          if (activateError) {
+            console.error('Error ensuring session activation via update:', activateError);
+          } else {
+            console.log('Session activation reinforced via update');
+          }
         } else {
-          console.log('Session activation reinforced');
+          console.log('Session activation reinforced via RPC');
         }
       } else {
         console.log('No active sessions found');
@@ -199,70 +210,37 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       console.log('Session created successfully:', data);
       
-      // Immediate verification and forced activation if needed
-      let isSessionActive = false;
-      const maxRetries = 3;
-      let retryCount = 0;
-      
-      while (!isSessionActive && retryCount < maxRetries) {
-        // Check if the session is active
-        const { data: checkData, error: checkError } = await supabase
-          .from('attendance_sessions')
-          .select('is_active')
-          .eq('id', data.id)
-          .single();
-          
-        if (checkError) {
-          console.error(`Error checking session status (attempt ${retryCount + 1}):`, checkError);
+      // Use the RPC function to ensure activation - most reliable method
+      await supabase.rpc('force_activate_session', {
+        session_id: data.id
+      }).then(({ error }) => {
+        if (error) {
+          console.error('RPC activation failed during session creation:', error);
         } else {
-          console.log(`Session active status (attempt ${retryCount + 1}):`, checkData?.is_active);
-          if (checkData?.is_active) {
-            isSessionActive = true;
-            break;
-          } else {
-            console.log(`Session not active, forcefully activating (attempt ${retryCount + 1})...`);
-            
-            // Force activate with a direct update - explicit boolean casting
-            const { error: updateError } = await supabase
-              .from('attendance_sessions')
-              .update({ 
-                is_active: true,
-                end_time: null
-              })
-              .eq('id', data.id);
-              
-            if (updateError) {
-              console.error(`Error updating session status (attempt ${retryCount + 1}):`, updateError);
-            }
-            
-            // Wait a moment before checking again
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          console.log('RPC activation succeeded during session creation');
         }
-        retryCount++;
-      }
+      });
       
-      if (!isSessionActive) {
-        console.warn('Could not verify session as active after multiple attempts, making final attempt');
+      // Verify session is properly activated
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('attendance_sessions')
+        .select('id, is_active')
+        .eq('id', data.id)
+        .single();
         
-        // Final attempt with a direct update, no casting
-        await supabase.rpc('force_activate_session', { session_id: data.id })
-          .then(({ error }) => {
-            if (error) {
-              console.error('RPC activation failed:', error);
-            } else {
-              console.log('RPC activation completed');
-            }
-          });
+      if (verifyError) {
+        console.error('Error verifying session activation:', verifyError);
+      } else {
+        console.log('Session activation verified:', verifyData);
+        
+        // If verification shows session is not active, try once more
+        if (!verifyData.is_active) {
+          console.warn('Session not active after creation and RPC, trying once more');
           
-        // Final verification
-        const { data: finalCheck } = await supabase
-          .from('attendance_sessions')
-          .select('is_active')
-          .eq('id', data.id)
-          .maybeSingle();
-          
-        console.log('Final activation status check:', finalCheck?.is_active);
+          // Use the dedicated utility function for reliable activation
+          const activated = await forceSessionActivation(data.id);
+          console.log('Final activation attempt result:', activated);
+        }
       }
       
       setSessionId(data.id);

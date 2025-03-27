@@ -34,13 +34,11 @@ const createForceActivateRPC = async () => {
       session_id: '00000000-0000-0000-0000-000000000000' 
     });
     
-    // If the function doesn't exist, error will be about function not existing
-    if (error && error.message.includes('function') && error.message.includes('does not exist')) {
-      console.log('force_activate_session function does not exist, attempting to create it');
-      
-      // We can't create the function directly from client code,
-      // but we can prompt the user to do so
-      console.warn('Please create the force_activate_session function in your Supabase SQL editor');
+    // If we get a specific error about session not found, that means the function exists
+    if (error && (error.message.includes('no rows') || error.code === 'PGRST116')) {
+      console.log('force_activate_session function exists and is accessible');
+    } else if (error && error.message.includes('function') && error.message.includes('does not exist')) {
+      console.warn('force_activate_session function does not exist, please create it in the Supabase SQL editor');
     }
   } catch (error) {
     console.error('Error checking RPC function:', error);
