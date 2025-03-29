@@ -6,16 +6,16 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-// Configure client with optimized options
+// Configure client with optimized options for faster connections
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true, // Enable session detection in URL
-    storageKey: 'supabase.auth.token', // Ensure consistent storage key
+    detectSessionInUrl: true,
+    storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 60000, // Increased timeout for better connection stability
+    timeout: 30000, // Reduced timeout for faster connection detection
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -25,7 +25,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Optimized connection checking utility
+// Optimized connection checking utility with faster timeout
 export const checkConnection = async (): Promise<boolean> => {
   try {
     console.log('Starting quick connection check...');
@@ -33,12 +33,13 @@ export const checkConnection = async (): Promise<boolean> => {
     // Use a shorter timeout for faster response
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 5 seconds');
+      console.log('Connection check timed out after 3 seconds');
       controller.abort();
-    }, 5000); // Reduced from 10 seconds to 5 seconds
+    }, 3000); // Reduced from 5 seconds to 3 seconds
     
-    // Use a simple count query to check connection
-    const { error } = await supabase.from('profiles')
+    // Use a simpler, faster query to check connection
+    const { error } = await supabase
+      .from('profiles')
       .select('count', { count: 'exact', head: true })
       .limit(1)
       .abortSignal(controller.signal);

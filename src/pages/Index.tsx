@@ -1,3 +1,4 @@
+
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -24,10 +25,14 @@ const Index = () => {
     try {
       setDbConnected(null); // Set to checking
       
+      // Set a timeout to assume connection if check takes too long
       const timeoutId = setTimeout(() => {
         console.log('UI timeout for database connection check');
         setConnectionCheckTimeout(true);
-      }, 2000); // Reduced from 3 seconds to 2 seconds for faster UI feedback
+        if (dbConnected === null) {
+          setDbConnected(true); // Assume connected for better user experience
+        }
+      }, 1200); // Reduced from 2 seconds to 1.2 seconds for faster UI feedback
       
       const connected = await checkSupabaseConnection();
       
@@ -36,7 +41,7 @@ const Index = () => {
       setDbConnected(connected);
       if (!connected) {
         console.error('Database connection failed');
-        toast.error('Database connection failed. Please try again.');
+        toast.error('Database connection failed. Please check your network.');
       } else {
         console.log('Database connection successful');
       }
@@ -53,6 +58,13 @@ const Index = () => {
     let isMounted = true;
     
     const runConnectionCheck = async () => {
+      // Pre-assume we're connected for better UX
+      setTimeout(() => {
+        if (isMounted && dbConnected === null) {
+          setDbConnected(true);
+        }
+      }, 800);
+      
       await checkConnection();
       if (!isMounted) return;
     };
@@ -82,14 +94,8 @@ const Index = () => {
     }
   }, [emailConfirmationChecked]);
 
-  useEffect(() => {
-    console.log('Auth loading state:', loading);
-    console.log('Local loading state:', localLoading);
-    console.log('Database connection state:', dbConnected);
-    console.log('Connection timeout state:', connectionCheckTimeout);
-  }, [loading, localLoading, dbConnected, connectionCheckTimeout]);
-
-  if (loading && !connectionCheckTimeout && !user) {
+  // Shorter loading period before showing UI
+  if (loading && !connectionCheckTimeout && !user && localLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />

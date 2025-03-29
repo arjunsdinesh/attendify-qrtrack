@@ -1,11 +1,10 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Import the values from the working Supabase client configuration
 const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-// Enhanced Supabase client configuration for better connection stability
+// Enhanced Supabase client configuration for faster connection
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -14,8 +13,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 60000, // Increased timeout for better stability
-    heartbeatIntervalMs: 5000, // Faster heartbeat to prevent connection drops
+    timeout: 30000, // Reduced timeout for faster connection
+    heartbeatIntervalMs: 8000, // Optimized heartbeat interval
   },
   global: {
     headers: {
@@ -75,7 +74,7 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Faster connection check with shorter timeout and simplified queries
+// Faster connection check with shorter timeout and optimized queries
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('Performing quick database connection check...');
@@ -83,9 +82,9 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     // Create a faster timeout for better responsiveness
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 6 seconds');
+      console.log('Connection check timed out after 3 seconds');
       controller.abort();
-    }, 6000); // Reduced from 15 seconds to 6 seconds
+    }, 3000); // Reduced from 6 seconds to 3 seconds
     
     try {
       // Use a simpler, faster query to check connection
@@ -104,9 +103,9 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       
       console.warn('Initial connection check failed, trying fallback');
       
-      // Simple fallback query with no joins
+      // Simple fallback query with no joins or complex logic
       const { error: fallbackError } = await supabase
-        .from('attendance_sessions')
+        .from('profiles')
         .select('id')
         .limit(1);
         

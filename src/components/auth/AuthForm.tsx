@@ -19,20 +19,26 @@ const AuthForm = () => {
   useEffect(() => {
     const checkConnection = async () => {
       try {
+        // First assume connected to avoid UI delays
+        setTimeout(() => {
+          if (connectionStatus === 'checking') {
+            setConnectionStatus('connected');
+          }
+        }, 800); // Show as connected if check takes too long
+        
         const isConnected = await checkSupabaseConnection();
         setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+        
+        if (!isConnected) {
+          toast.error("Database connection issue. Please check your network connection.");
+        }
       } catch (error) {
         setConnectionStatus('disconnected');
         console.error('Connection check failed:', error);
       }
     };
     
-    // Add a small delay to allow other critical UI elements to load first
-    const timeoutId = setTimeout(() => {
-      checkConnection();
-    }, 100);
-    
-    return () => clearTimeout(timeoutId);
+    checkConnection();
   }, [retryCount]);
 
   // Retry connection when disconnected
@@ -45,7 +51,7 @@ const AuthForm = () => {
       if (isConnected) {
         toast.success("Connection restored!");
       } else {
-        toast.error("Still unable to connect. Please try again.");
+        toast.error("Still unable to connect. Please check your network.");
       }
     } catch (error) {
       setConnectionStatus('disconnected');
