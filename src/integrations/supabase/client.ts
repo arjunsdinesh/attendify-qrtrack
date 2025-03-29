@@ -6,7 +6,7 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-// Configure client with optimized options for faster connections
+// Configure client with optimized options for faster connections and better session handling
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,
@@ -15,7 +15,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 20000, // Further reduced timeout for faster connections
+    timeout: 15000, // Further reduced timeout for faster connections
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -30,14 +30,14 @@ export const checkConnection = async (): Promise<boolean> => {
   try {
     console.log('Starting quick connection check...');
     
-    // Use an even shorter timeout for faster response
+    // Ultra-fast connection check with minimal query
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 2 seconds');
+      console.log('Connection check timed out after 1.5 seconds');
       controller.abort();
-    }, 2000); // Reduced from 3 seconds to 2 seconds
+    }, 1500); // Further reduced for faster response
     
-    // Use a simpler, faster query to check connection
+    // Simplified query that minimizes data transfer
     const { error } = await supabase
       .from('profiles')
       .select('count', { count: 'exact', head: true })

@@ -1,13 +1,15 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
-import LoginForm from './LoginForm';
-import RegisterForm from './RegisterForm';
 import ConnectionStatus from './ConnectionStatus';
+
+// Lazy load the forms for better performance
+const LoginForm = lazy(() => import('./LoginForm'));
+const RegisterForm = lazy(() => import('./RegisterForm'));
 
 const AuthForm = () => {
   const { initialRole } = useAuth();
@@ -17,47 +19,45 @@ const AuthForm = () => {
 
   // Check Supabase connection on component mount - with optimized timing
   useEffect(() => {
+    let isMounted = true;
     const checkConnection = async () => {
       try {
         // First assume connected to avoid UI delays
         setTimeout(() => {
-          if (connectionStatus === 'checking') {
+          if (isMounted && connectionStatus === 'checking') {
             setConnectionStatus('connected');
           }
-        }, 600); // Show as connected sooner for better UX
+        }, 500); // Show as connected even sooner for better UX
         
         const isConnected = await checkSupabaseConnection();
-        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
         
-        if (!isConnected) {
-          toast.error("Database connection issue. Please check your network connection.");
+        // Only update if component is still mounted
+        if (isMounted) {
+          setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+          
+          if (!isConnected) {
+            toast.error("Database connection issue. Please check your network connection.");
+          }
         }
       } catch (error) {
-        setConnectionStatus('disconnected');
-        console.error('Connection check failed:', error);
+        if (isMounted) {
+          setConnectionStatus('disconnected');
+          console.error('Connection check failed:', error);
+        }
       }
     };
     
     checkConnection();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [retryCount]);
 
   // Retry connection when disconnected
-  const handleRetryConnection = async () => {
+  const handleRetryConnection = () => {
     setConnectionStatus('checking');
     setRetryCount(prev => prev + 1);
-    try {
-      const isConnected = await checkSupabaseConnection();
-      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-      if (isConnected) {
-        toast.success("Connection restored!");
-      } else {
-        toast.error("Still unable to connect. Please check your network.");
-      }
-    } catch (error) {
-      setConnectionStatus('disconnected');
-      console.error('Retry connection failed:', error);
-      toast.error("Connection check failed.");
-    }
   };
 
   return (
@@ -86,7 +86,9 @@ const AuthForm = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <LoginForm connectionStatus={connectionStatus} />
+              <Suspense fallback={<div className="text-center py-4">Loading login form...</div>}>
+                <LoginForm connectionStatus={connectionStatus} />
+              </Suspense>
             </CardContent>
           </TabsContent>
           
@@ -99,7 +101,9 @@ const AuthForm = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <RegisterForm connectionStatus={connectionStatus} />
+              <Suspense fallback={<div className="text-center py-4">Loading registration form...</div>}>
+                <RegisterForm connectionStatus={connectionStatus} />
+              </Suspense>
             </CardContent>
           </TabsContent>
         </Tabs>
