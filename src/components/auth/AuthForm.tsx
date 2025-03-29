@@ -24,7 +24,7 @@ const AuthForm = () => {
           if (connectionStatus === 'checking') {
             setConnectionStatus('connected');
           }
-        }, 800); // Show as connected if check takes too long
+        }, 600); // Show as connected sooner for better UX
         
         const isConnected = await checkSupabaseConnection();
         setConnectionStatus(isConnected ? 'connected' : 'disconnected');

@@ -15,7 +15,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 30000, // Reduced timeout for faster connection detection
+    timeout: 20000, // Further reduced timeout for faster connections
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -30,12 +30,12 @@ export const checkConnection = async (): Promise<boolean> => {
   try {
     console.log('Starting quick connection check...');
     
-    // Use a shorter timeout for faster response
+    // Use an even shorter timeout for faster response
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 3 seconds');
+      console.log('Connection check timed out after 2 seconds');
       controller.abort();
-    }, 3000); // Reduced from 5 seconds to 3 seconds
+    }, 2000); // Reduced from 3 seconds to 2 seconds
     
     // Use a simpler, faster query to check connection
     const { error } = await supabase

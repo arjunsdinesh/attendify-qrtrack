@@ -560,10 +560,15 @@ export const ensureSessionActive = async (sessionId: string): Promise<boolean> =
     
     // Try multiple activation methods in sequence
     // 1. First try the RPC method
-    const rpcSuccess = await activateSessionViaRPC(sessionId);
-    if (rpcSuccess) {
-      console.log('RPC activation successful');
-      return true;
+    try {
+      const rpcSuccess = await activateSessionViaRPC(sessionId);
+      if (rpcSuccess) {
+        console.log('RPC activation successful');
+        return true;
+      }
+    } catch (error) {
+      console.error('Error during RPC activation:', error);
+      // Continue to next method
     }
     
     // 2. If RPC fails, verify and activate
