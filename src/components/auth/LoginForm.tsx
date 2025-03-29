@@ -38,6 +38,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
       email: '',
       password: '',
     },
+    mode: 'onBlur', // Changed from default to improve responsiveness
   });
 
   // Handle login submission with improved error handling
@@ -114,6 +115,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     placeholder="your.email@example.com" 
                     type="email" 
                     autoComplete="email"
+                    aria-label="Email"
                     {...field} 
                     className="input-focus-ring"
                     disabled={isSubmitting || loading}
@@ -134,6 +136,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     placeholder="Your password" 
                     type="password" 
                     autoComplete="current-password"
+                    aria-label="Password"
                     {...field} 
                     className="input-focus-ring"
                     disabled={isSubmitting || loading}

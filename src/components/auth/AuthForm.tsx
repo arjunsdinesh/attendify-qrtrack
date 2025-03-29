@@ -27,7 +27,7 @@ const AuthForm = () => {
           if (isMounted && connectionStatus === 'checking') {
             setConnectionStatus('connected');
           }
-        }, 500); // Show as connected even sooner for better UX
+        }, 300); // Even faster initial UI response
         
         const isConnected = await checkSupabaseConnection();
         
@@ -36,6 +36,7 @@ const AuthForm = () => {
           setConnectionStatus(isConnected ? 'connected' : 'disconnected');
           
           if (!isConnected) {
+            console.error("Database connection failed");
             toast.error("Database connection issue. Please check your network connection.");
           }
         }
