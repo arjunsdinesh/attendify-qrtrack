@@ -15,7 +15,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 15000, // Further reduced timeout for faster connections
+    timeout: 10000, // Reduced timeout for faster connections
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -25,19 +25,19 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Optimized connection checking utility with faster timeout
+// Optimized connection checking utility with better error handling
 export const checkConnection = async (): Promise<boolean> => {
   try {
-    console.log('Starting quick connection check...');
+    console.log('Performing quick database connection check...');
     
-    // Ultra-fast connection check with minimal query
+    // Fast connection check with minimal query
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 1.5 seconds');
+      console.log('Database connection check timed out');
       controller.abort();
-    }, 1500); // Further reduced for faster response
+    }, 3000);
     
-    // Simplified query that minimizes data transfer
+    // Use a lightweight query for faster response
     const { error } = await supabase
       .from('profiles')
       .select('count', { count: 'exact', head: true })
@@ -47,17 +47,17 @@ export const checkConnection = async (): Promise<boolean> => {
     clearTimeout(timeoutId);
     
     if (error) {
-      console.error('Connection check failed with error:', error);
+      console.error('Database connection check failed:', error);
       return false;
     }
     
-    console.log('Connection check successful');
+    console.log('Database connection successful');
     return true;
   } catch (error) {
-    console.error('Connection check exception:', error);
+    console.error('Database connection check exception:', error);
     return false;
   }
 };
 
-// Export a more specific function to check Supabase connection
+// Specific function to check Supabase connection
 export const checkSupabaseConnection = checkConnection;

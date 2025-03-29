@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { checkSupabaseConnection } from '@/utils/supabase';
+import { checkSupabaseConnection } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import ConnectionStatus from './ConnectionStatus';
 

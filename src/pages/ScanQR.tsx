@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { LoadingSpinner } from '@/components/ui-components';
 import QRCodeScanner from '@/components/qr-code/QRCodeScanner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase, checkSupabaseConnection } from '@/utils/supabase';
+import { supabase, checkSupabaseConnection } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { RefreshCw, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 
@@ -33,9 +33,26 @@ const ScanQR = () => {
       const timeoutId = setTimeout(() => controller.abort(), 4000);
       
       try {
-        const { data, error, count } = await supabase
+        // First use a simpler, faster check using count
+        const { count, error: countError } = await supabase
           .from('attendance_sessions')
-          .select('id', { count: 'exact' })
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true);
+          
+        if (countError) {
+          console.error('Error checking active sessions count:', countError);
+        } else {
+          console.log('Active sessions count:', count);
+          const hasActiveSessions = (count || 0) > 0;
+          setSessionExists(hasActiveSessions);
+          clearTimeout(timeoutId);
+          return hasActiveSessions;
+        }
+        
+        // If count fails, use the traditional query
+        const { data, error } = await supabase
+          .from('attendance_sessions')
+          .select('id')
           .eq('is_active', true)
           .limit(1)
           .abortSignal(controller.signal);
@@ -48,8 +65,7 @@ const ScanQR = () => {
           return false;
         }
         
-        // Use count directly from the response
-        const hasActiveSessions = count ? count > 0 : false;
+        const hasActiveSessions = data && data.length > 0;
         console.log('Active sessions check:', hasActiveSessions ? 'Found' : 'None found');
         setSessionExists(hasActiveSessions);
         return hasActiveSessions;
@@ -115,16 +131,10 @@ const ScanQR = () => {
         console.log('Database connection successful');
         checkConnectionRetryCount.current = 0;
         
-        const { count, error: sessionError } = await supabase
-          .from('attendance_sessions')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true);
-          
-        const hasActiveSessions = !sessionError && (count || 0) > 0;
-        setSessionExists(hasActiveSessions);
+        const sessionCheck = await checkForActiveSessions();
         
         if (showToasts) {
-          if (hasActiveSessions) {
+          if (sessionCheck) {
             toast.success('Connected to attendance system. Active sessions available.');
           } else if (hasAttemptedScan) {
             toast.info('Connected to attendance system. No active sessions detected.');
