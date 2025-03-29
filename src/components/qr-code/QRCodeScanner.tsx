@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,9 +13,10 @@ import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession 
 
 interface QRCodeScannerProps {
   onScanningStateChange?: (isScanning: boolean) => void;
+  onScanAttempt?: () => void; // New callback for scan attempts
 }
 
-const QRCodeScanner = ({ onScanningStateChange }: QRCodeScannerProps) => {
+const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerProps) => {
   const { user } = useAuth();
   const [scanning, setScanning] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -28,6 +30,7 @@ const QRCodeScanner = ({ onScanningStateChange }: QRCodeScannerProps) => {
   const processingRef = useRef<boolean>(false);
   const scannedSessionIdRef = useRef<string | null>(null);
   const displayedToastsRef = useRef<Set<string>>(new Set());
+  const hasAttemptedScanRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (onScanningStateChange) {
@@ -298,6 +301,12 @@ const QRCodeScanner = ({ onScanningStateChange }: QRCodeScannerProps) => {
       if (lastScanned === data) return;
       setLastScanned(data);
       
+      // Notify parent about scan attempt
+      if (onScanAttempt && !hasAttemptedScanRef.current) {
+        hasAttemptedScanRef.current = true;
+        onScanAttempt();
+      }
+      
       setProcessing(true);
       processingRef.current = true;
       setError(null);
@@ -419,6 +428,12 @@ const QRCodeScanner = ({ onScanningStateChange }: QRCodeScannerProps) => {
   };
 
   const toggleScanner = () => {
+    // When starting the scanner, notify about scan attempt
+    if (!scanning && onScanAttempt && !hasAttemptedScanRef.current) {
+      hasAttemptedScanRef.current = true;
+      onScanAttempt();
+    }
+    
     setScanning(prev => !prev);
     setError(null);
     setSuccessMessage(null);

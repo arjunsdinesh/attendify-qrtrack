@@ -20,6 +20,7 @@ const ScanQR = () => {
   const [scannerKey, setScannerKey] = useState<number>(Date.now());
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
+  const [hasAttemptedScan, setHasAttemptedScan] = useState<boolean>(false);
   const connectionCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkConnectionRetryCount = useRef<number>(0);
   // Add a flag to prevent duplicate connection checks while scanning
@@ -112,7 +113,8 @@ const ScanQR = () => {
         if (showToasts) {
           if (hasActiveSessions) {
             toast.success('Connected to attendance system. Active sessions available.');
-          } else {
+          } else if (hasAttemptedScan) {
+            // Only show this toast if user has tried to scan something
             toast.info('Connected to attendance system. No active sessions detected.');
           }
         }
@@ -141,7 +143,7 @@ const ScanQR = () => {
     } finally {
       setIsCheckingConnection(false);
     }
-  }, [isCheckingConnection, checkForActiveSessions, connectionStatus]);
+  }, [isCheckingConnection, checkForActiveSessions, connectionStatus, hasAttemptedScan]);
   
   const resetScanner = useCallback(() => {
     setScannerKey(Date.now());
@@ -236,11 +238,12 @@ const ScanQR = () => {
             </Alert>
           )}
           
-          {connectionStatus === true && sessionExists === false && (
+          {/* Only show the "no active sessions" alert if a scan has been attempted */}
+          {connectionStatus === true && sessionExists === false && hasAttemptedScan && (
             <Alert className="border-yellow-200 bg-yellow-50 text-yellow-800">
               <AlertDescription className="flex items-center">
                 <AlertCircle className="h-4 w-4 mr-2" />
-                <span>Connected, but no active attendance sessions found. Ask your teacher to start a session.</span>
+                <span>No active attendance sessions found. Ask your teacher to start a session.</span>
               </AlertDescription>
             </Alert>
           )}
@@ -299,6 +302,9 @@ const ScanQR = () => {
           onScanningStateChange={(scanning) => {
             isScanningRef.current = scanning;
             console.log('Scanning state changed:', scanning);
+          }}
+          onScanAttempt={() => {
+            setHasAttemptedScan(true);
           }}
         />
       </div>
