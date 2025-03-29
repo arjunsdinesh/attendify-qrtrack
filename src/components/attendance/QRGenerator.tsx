@@ -25,6 +25,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const [lastQRGeneration, setLastQRGeneration] = useState<number>(Date.now());
   const [sessionStatusCheck, setSessionStatusCheck] = useState<boolean>(false);
   const [qrRefreshPending, setQrRefreshPending] = useState<boolean>(false);
+  const [timerReachedZero, setTimerReachedZero] = useState<boolean>(false);
 
   const forceActivateSession = useCallback(async () => {
     try {
@@ -101,15 +102,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   }, [sessionId, sessionActive, lastActivationTime]);
 
   const generateQRData = useCallback(async () => {
-    const now = Date.now();
-    
-    if (qrValue && now - lastQRGeneration < 29500) {
-      console.log('QR refresh prevented - not yet time for a 30-second refresh');
-      setQrRefreshPending(true);
+    if (!timerReachedZero && qrValue && Date.now() - lastQRGeneration < 29500) {
+      console.log('QR refresh prevented - timer has not reached zero yet');
       return;
     }
     
     setQrRefreshPending(false);
+    setTimerReachedZero(false);
     
     if (refreshingQR) {
       console.log('Already refreshing QR, skipping this request');
@@ -174,7 +173,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       });
       
       setQrValue(JSON.stringify(qrData));
-      setLastQRGeneration(now);
+      setLastQRGeneration(timestamp);
       
     } catch (error: any) {
       console.error('Error generating QR code:', error);
@@ -184,7 +183,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       setGenerating(false);
       setRefreshingQR(false);
     }
-  }, [sessionId, timeLeft, forceActivateSession, refreshingQR, qrValue, lastQRGeneration]);
+  }, [sessionId, timeLeft, forceActivateSession, refreshingQR, qrValue, lastQRGeneration, timerReachedZero]);
 
   useEffect(() => {
     let pingInterval: ReturnType<typeof setInterval>;
@@ -248,13 +247,9 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          console.log('Timer hit 0, generating new QR code');
-          generateQRData();
+          console.log('Timer hit 0, marking for QR refresh');
+          setTimerReachedZero(true);
           return 30;
-        }
-        
-        if (prev === 1) {
-          setQrRefreshPending(true);
         }
         
         return prev - 1;
@@ -267,6 +262,13 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       clearInterval(interval);
     };
   }, [generateQRData, forceActivateSession]);
+
+  useEffect(() => {
+    if (timerReachedZero) {
+      console.log('Timer reached zero, triggering QR refresh');
+      generateQRData();
+    }
+  }, [timerReachedZero, generateQRData]);
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -331,15 +333,11 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       </p>
       <Button 
         onClick={() => {
-          if (!qrRefreshPending) {
-            setTimeLeft(30);
-            generateQRData();
-          } else {
-            toast.info("QR code will refresh automatically in a moment");
-          }
+          setTimeLeft(30);
+          setTimerReachedZero(true);
         }} 
         className="w-full bg-green-600 hover:bg-green-700 mt-2"
-        disabled={generating || refreshingQR || qrRefreshPending}
+        disabled={generating || refreshingQR}
       >
         {generating ? <LoadingSpinner className="h-4 w-4 mr-2" /> : null}
         Refresh QR Code
