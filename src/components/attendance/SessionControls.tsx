@@ -67,30 +67,43 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setActive(true);
 
-        // Use RPC to ensure the session stays active
-        const { error: rpcError } = await supabase.rpc('force_activate_session', {
-          session_id: data.id
-        });
-        
-        if (rpcError) {
-          console.error('Error ensuring session activation via RPC:', rpcError);
+        try {
+          const { error: rpcError } = await supabase.rpc('force_activate_session', {
+            session_id: data.id
+          });
           
-          // Fall back to standard update if RPC fails
-          const { error: activateError } = await supabase
-            .from('attendance_sessions')
-            .update({ 
-              is_active: true,
-              end_time: null 
-            })
-            .eq('id', data.id);
-          
-          if (activateError) {
-            console.error('Error ensuring session activation via update:', activateError);
+          if (rpcError) {
+            console.error('Error ensuring session activation via RPC:', rpcError);
+            
+            const activated = await forceSessionActivation(data.id);
+            
+            if (!activated) {
+              const { error: activateError } = await supabase
+                .from('attendance_sessions')
+                .update({ 
+                  is_active: true,
+                  end_time: null 
+                })
+                .eq('id', data.id);
+              
+              if (activateError) {
+                console.error('All session activation methods failed:', activateError);
+              } else {
+                console.log('Session activation reinforced via direct update');
+              }
+            } else {
+              console.log('Session activation reinforced via utility function');
+            }
           } else {
-            console.log('Session activation reinforced via update');
+            console.log('Session activation reinforced via RPC');
           }
-        } else {
-          console.log('Session activation reinforced via RPC');
+        } catch (activationError) {
+          console.error('Error during session activation:', activationError);
+          
+          await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true, end_time: null })
+            .eq('id', data.id);
         }
       } else {
         console.log('No active sessions found');
@@ -161,7 +174,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
-      // Deactivate any existing active sessions
       const { error: deactivateError } = await supabase
         .from('attendance_sessions')
         .update({ 
@@ -185,7 +197,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         is_active: true
       });
       
-      // Create the new session with is_active explicitly set to true
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
@@ -210,37 +221,51 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       console.log('Session created successfully:', data);
       
-      // Use the RPC function to ensure activation - most reliable method
-      await supabase.rpc('force_activate_session', {
-        session_id: data.id
-      }).then(({ error }) => {
-        if (error) {
-          console.error('RPC activation failed during session creation:', error);
-        } else {
-          console.log('RPC activation succeeded during session creation');
-        }
-      });
-      
-      // Verify session is properly activated
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('attendance_sessions')
-        .select('id, is_active')
-        .eq('id', data.id)
-        .single();
+      try {
+        await supabase.rpc('force_activate_session', {
+          session_id: data.id
+        }).then(({ error }) => {
+          if (error) {
+            console.error('RPC activation failed during session creation:', error);
+            return false;
+          } else {
+            console.log('RPC activation succeeded during session creation');
+            return true;
+          }
+        });
         
-      if (verifyError) {
-        console.error('Error verifying session activation:', verifyError);
-      } else {
-        console.log('Session activation verified:', verifyData);
+        await forceSessionActivation(data.id);
         
-        // If verification shows session is not active, try once more
-        if (!verifyData.is_active) {
-          console.warn('Session not active after creation and RPC, trying once more');
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('attendance_sessions')
+          .select('id, is_active')
+          .eq('id', data.id)
+          .maybeSingle();
           
-          // Use the dedicated utility function for reliable activation
-          const activated = await forceSessionActivation(data.id);
-          console.log('Final activation attempt result:', activated);
+        if (verifyError) {
+          console.error('Error verifying session activation:', verifyError);
+        } else {
+          console.log('Session activation verified:', verifyData);
+          
+          if (verifyData && !verifyData.is_active) {
+            console.warn('Session not active after all activation attempts, trying direct update');
+            
+            await supabase
+              .from('attendance_sessions')
+              .update({ 
+                is_active: true,
+                end_time: null 
+              })
+              .eq('id', data.id);
+          }
         }
+      } catch (activationError) {
+        console.error('Error during activation verification:', activationError);
+        
+        await supabase
+          .from('attendance_sessions')
+          .update({ is_active: true, end_time: null })
+          .eq('id', data.id);
       }
       
       setSessionId(data.id);

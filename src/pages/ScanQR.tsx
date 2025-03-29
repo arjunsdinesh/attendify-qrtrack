@@ -1,3 +1,4 @@
+
 import { useEffect, memo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -32,9 +33,9 @@ const ScanQR = () => {
       const timeoutId = setTimeout(() => controller.abort(), 4000);
       
       try {
-        const { data, error } = await supabase
+        const { data, error, count } = await supabase
           .from('attendance_sessions')
-          .select('id')
+          .select('id', { count: 'exact' })
           .eq('is_active', true)
           .limit(1)
           .abortSignal(controller.signal);
@@ -47,7 +48,8 @@ const ScanQR = () => {
           return false;
         }
         
-        const hasActiveSessions = data && data.length > 0;
+        // Use count directly from the response
+        const hasActiveSessions = count ? count > 0 : false;
         console.log('Active sessions check:', hasActiveSessions ? 'Found' : 'None found');
         setSessionExists(hasActiveSessions);
         return hasActiveSessions;

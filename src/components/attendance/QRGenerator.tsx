@@ -39,29 +39,37 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       setGenerating(true);
       setSessionStatusCheck(true);
       
-      const { data: checkData, error: checkError } = await supabase
-        .from('attendance_sessions')
-        .select('id, is_active')
-        .eq('id', sessionId)
-        .maybeSingle();
+      try {
+        const { data: checkData, error: checkError } = await supabase
+          .from('attendance_sessions')
+          .select('id, is_active')
+          .eq('id', sessionId)
+          .maybeSingle();
+          
+        if (checkError) {
+          console.error('Error checking session existence:', checkError);
+          throw new Error('Session check failed');
+        } else if (!checkData) {
+          console.error('Session does not exist:', sessionId);
+          setSessionActive(false);
+          setError('Session not found. Please create a new session.');
+          return false;
+        }
         
-      if (checkError) {
-        console.error('Error checking session existence:', checkError);
-      } else if (!checkData) {
-        console.error('Session does not exist:', sessionId);
-        setSessionActive(false);
-        setError('Session not found. Please create a new session.');
-        return false;
-      }
-      
-      const activated = await supabase.rpc('force_activate_session', { 
-        session_id: sessionId 
-      });
-      
-      if (activated.error) {
-        console.error('RPC activation error:', activated.error);
+        console.log('Session found, active status:', checkData.is_active);
         
-        const { data, error } = await supabase
+        if (checkData.is_active) {
+          setSessionActive(true);
+          setError(null);
+          setLastActivationTime(now);
+          return true;
+        }
+        
+        const { data: rpcData, error: rpcError } = await supabase.rpc('force_activate_session', { 
+          session_id: sessionId 
+        });
+        
+        const { data: updateData, error: updateError } = await supabase
           .from('attendance_sessions')
           .update({ 
             is_active: true,
@@ -71,26 +79,38 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
           .select('is_active')
           .single();
           
-        if (error || !data || !data.is_active) {
-          console.error('Standard update failed after RPC failure:', error);
+        await forceSessionActivation(sessionId);
+        
+        if ((rpcError && updateError) || (!updateData?.is_active && !rpcData)) {
+          console.error('All activation methods failed:', { rpcError, updateError });
           setSessionActive(false);
-          setError('Failed to activate session');
+          setError('Failed to activate session. Try creating a new session.');
           return false;
         }
         
-        console.log('Standard activation succeeded after RPC failure');
+        console.log('Session activation successful through at least one method');
         setLastActivationTime(now);
         setSessionActive(true);
         setError(null);
         return true;
+      } catch (error) {
+        console.error('Error in activation process:', error);
+        
+        try {
+          await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true, end_time: null })
+            .eq('id', sessionId);
+            
+          setLastActivationTime(now);
+          setSessionActive(true);
+          setError(null);
+          return true;
+        } catch (e) {
+          setError('Could not activate session after multiple attempts');
+          return false;
+        }
       }
-      
-      console.log('RPC activation successful:', activated.data);
-      setLastActivationTime(now);
-      setSessionActive(true);
-      setError(null);
-      return true;
-      
     } catch (error) {
       console.error('Error in forceActivateSession:', error);
       setError('Failed to activate session');
@@ -129,30 +149,33 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
       
       console.log('Generating QR code for session:', sessionId);
       
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('attendance_sessions')
-        .select('is_active, class_id')
-        .eq('id', sessionId)
-        .maybeSingle();
-        
-      if (sessionError) {
-        console.error('Error checking session:', sessionError);
-        const activated = await forceActivateSession();
-        
-        if (!activated) {
-          setConnectionError(true);
-          throw new Error('Could not verify session status');
+      try {
+        const { data: sessionData, error: sessionError } = await supabase
+          .from('attendance_sessions')
+          .select('is_active, class_id')
+          .eq('id', sessionId)
+          .maybeSingle();
+          
+        if (sessionError || !sessionData) {
+          console.error('Error checking session or session not found:', sessionError);
+          await forceActivateSession();
+        } else if (!sessionData.is_active) {
+          console.log('Session exists but is not active, using multiple activation methods');
+          
+          await Promise.all([
+            forceActivateSession(),
+            activateSessionViaRPC(sessionId),
+            supabase
+              .from('attendance_sessions')
+              .update({ is_active: true, end_time: null })
+              .eq('id', sessionId)
+          ]);
+        } else {
+          console.log('Session already active:', sessionData);
+          setSessionActive(true);
         }
-      } else if (!sessionData) {
-        console.error('Session not found:', sessionId);
-        setError('Session not found. Please create a new session.');
-        return;
-      } else if (!sessionData.is_active) {
-        console.log('Session exists but is not active, activating using RPC...');
-        await forceActivateSession();
-      } else {
-        console.log('Session already active:', sessionData);
-        setSessionActive(true);
+      } catch (error) {
+        console.error('Error in session activation:', error);
       }
       
       const timestamp = Date.now();
@@ -200,35 +223,30 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
           
           console.log('Sending keep-alive ping for session:', sessionId);
           
-          const { error } = await supabase.rpc('force_activate_session', { 
-            session_id: sessionId 
-          });
-          
-          if (error) {
-            console.error('Error in keep-alive RPC ping:', error);
+          try {
+            const { error: rpcError } = await supabase.rpc('force_activate_session', { 
+              session_id: sessionId 
+            });
             
-            const { data, error: updateError } = await supabase
+            await supabase
               .from('attendance_sessions')
               .update({ 
                 is_active: true, 
                 end_time: null 
               })
-              .eq('id', sessionId)
-              .select('is_active')
-              .single();
+              .eq('id', sessionId);
               
-            if (updateError || !data || !data.is_active) {
-              console.error('Keep-alive standard update failed:', updateError);
-              await forceActivateSession();
+            if (rpcError) {
+              console.error('RPC ping failed but direct update sent:', rpcError);
             } else {
-              console.log('Keep-alive standard update successful');
-              setSessionActive(true);
-              setError(null);
+              console.log('Keep-alive ping successful');
             }
-          } else {
-            console.log('Keep-alive RPC ping successful');
+            
             setSessionActive(true);
             setError(null);
+          } catch (error) {
+            console.error('Error in ping methods:', error);
+            await forceActivateSession();
           }
         } catch (error) {
           console.error('Exception in keep-alive ping:', error);

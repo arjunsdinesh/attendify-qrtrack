@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 
 /**
@@ -57,19 +58,59 @@ async function fetchSessionExtendedData(sessionId: string): Promise<{
 export async function activateSessionViaRPC(sessionId: string): Promise<boolean> {
   try {
     console.log('Activating session via RPC function:', sessionId);
+    // Try the RPC call first as it's the most reliable method
     const { data, error } = await supabase.rpc('force_activate_session', {
       session_id: sessionId
     });
     
     if (error) {
       console.error('RPC activation error:', error);
-      return false;
+      
+      // Fallback to direct update if RPC fails
+      const { data: updateData, error: updateError } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        })
+        .eq('id', sessionId)
+        .select('is_active')
+        .single();
+        
+      if (updateError || !updateData || !updateData.is_active) {
+        console.error('Direct update failed after RPC failure:', updateError);
+        return false;
+      }
+      
+      console.log('Direct update succeeded after RPC failure');
+      return true;
     }
     
     console.log('RPC activation result:', data);
     return !!data;
   } catch (error) {
     console.error('Exception in RPC activation:', error);
+    
+    // One more attempt with direct update as last resort
+    try {
+      const { data: lastAttemptData, error: lastAttemptError } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        })
+        .eq('id', sessionId)
+        .select('is_active')
+        .single();
+        
+      if (!lastAttemptError && lastAttemptData && lastAttemptData.is_active) {
+        console.log('Last resort activation succeeded');
+        return true;
+      }
+    } catch (e) {
+      console.error('Last resort activation failed:', e);
+    }
+    
     return false;
   }
 }
@@ -176,7 +217,7 @@ export const verifyAttendanceSession = async (
     if (countError) {
       console.error('Count query error:', countError);
       // Continue with the normal flow, don't return early
-    } else if ((count || 0) === 0) {
+    } else if (count === 0) {
       console.error('Session not found in count query:', sessionId);
       // But don't return yet, try the other queries as fallback
     } else {
@@ -196,7 +237,7 @@ export const verifyAttendanceSession = async (
         console.error('Session not found on second attempt:', sessionId);
         
         // If count query succeeded but detailed queries failed
-        if ((count || 0) > 0) {
+        if (count && count > 0) {
           console.log('Using count result as fallback - session exists but details unavailable');
           
           // Return basic existence but no details
@@ -236,7 +277,7 @@ export const verifyAttendanceSession = async (
       console.error('No data returned for session:', sessionId);
       
       // Last resort - if count showed it exists but we couldn't get data
-      if ((count || 0) > 0) {
+      if (count && count > 0) {
         return { 
           exists: true, 
           isActive: false,
@@ -274,6 +315,24 @@ export const verifyAttendanceSession = async (
       
       if (!activated) {
         console.error('Failed to activate session after multiple attempts');
+        
+        // One final attempt with a direct update
+        const { error: finalError } = await supabase
+          .from('attendance_sessions')
+          .update({ 
+            is_active: true, 
+            end_time: null 
+          })
+          .eq('id', sessionId);
+          
+        if (!finalError) {
+          console.log('Final direct update sent, assuming success');
+          return { 
+            exists: true, 
+            isActive: true,
+            data: { ...data, is_active: true }
+          };
+        }
         
         // Still return that the session exists even if activation failed
         return { 
@@ -329,10 +388,41 @@ export const activateAttendanceSession = async (sessionId: string): Promise<bool
       success = await persistSessionActivation(sessionId);
     }
     
+    if (!success) {
+      // One final direct attempt
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        })
+        .eq('id', sessionId);
+        
+      if (!error) {
+        console.log('Final direct update succeeded');
+        return true;
+      }
+    }
+    
     return success;
   } catch (error) {
     console.error('Exception in activateAttendanceSession:', error);
-    return false;
+    
+    // Last resort attempt
+    try {
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        })
+        .eq('id', sessionId);
+        
+      return !error;
+    } catch (e) {
+      console.error('Last resort activation failed:', e);
+      return false;
+    }
   }
 }
 
@@ -343,25 +433,54 @@ export const activateAttendanceSession = async (sessionId: string): Promise<bool
  */
 export const forceSessionActivation = async (sessionId: string): Promise<boolean> => {
   try {
-    // Try RPC first (most reliable)
-    const rpcSuccess = await activateSessionViaRPC(sessionId);
-    if (rpcSuccess) {
-      return true;
-    }
+    if (!sessionId) return false;
     
-    console.log('RPC activation failed, trying standard update');
+    console.log('Force activating session with all methods:', sessionId);
     
-    // Fall back to standard update if RPC fails
-    const { data, error } = await supabase
-      .from('attendance_sessions')
-      .update({ is_active: true, end_time: null })
-      .eq('id', sessionId)
-      .select('is_active')
-      .single();
+    // Try multiple methods in parallel for better chance of success
+    const results = await Promise.allSettled([
+      // Method 1: RPC call
+      activateSessionViaRPC(sessionId),
       
-    if (error || !data || !data.is_active) {
-      console.error('Standard update failed:', error);
-      return false;
+      // Method 2: Direct update
+      supabase
+        .from('attendance_sessions')
+        .update({ is_active: true, end_time: null })
+        .eq('id', sessionId)
+        .select('is_active')
+        .single()
+        .then(({ data }) => !!data?.is_active)
+        .catch(() => false),
+      
+      // Method 3: Another RPC attempt after a small delay
+      new Promise(resolve => setTimeout(() => {
+        activateSessionViaRPC(sessionId).then(resolve).catch(() => resolve(false));
+      }, 100))
+    ]);
+    
+    // Check if any method succeeded
+    const anySuccess = results.some(result => 
+      result.status === 'fulfilled' && result.value === true
+    );
+    
+    console.log('Parallel activation attempts result:', anySuccess ? 'SUCCESS' : 'FAILED');
+    
+    if (!anySuccess) {
+      // One final attempt with direct SQL
+      const { data, error } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        })
+        .eq('id', sessionId)
+        .select('is_active')
+        .single();
+        
+      if (error || !data || !data.is_active) {
+        console.error('All methods failed to activate session:', sessionId);
+        return false;
+      }
     }
     
     return true;
@@ -388,7 +507,20 @@ export const checkSessionExists = async (sessionId: string): Promise<boolean> =>
       
     if (error) {
       console.error('Error checking if session exists:', error);
-      return false;
+      
+      // Fallback to a simple query if count fails
+      const { data, error: fallbackError } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .maybeSingle();
+        
+      if (fallbackError) {
+        console.error('Fallback query failed:', fallbackError);
+        return false;
+      }
+      
+      return !!data;
     }
     
     return (count || 0) > 0;
@@ -410,29 +542,49 @@ export const ensureSessionActive = async (sessionId: string): Promise<boolean> =
     
     console.log('Ensuring session is active:', sessionId);
     
-    // Try RPC first as it's most reliable
-    const rpcSuccess = await activateSessionViaRPC(sessionId);
-    if (rpcSuccess) {
-      return true;
-    }
-    
-    // If RPC fails, verify the session exists and is active
-    const { exists, isActive, data } = await verifyAttendanceSession(sessionId, true);
-    
+    // Check if session exists first
+    const exists = await checkSessionExists(sessionId);
     if (!exists) {
       console.error('Session does not exist:', sessionId);
       return false;
     }
     
-    if (!isActive) {
-      console.error('Session exists but is not active:', sessionId);
-      // One last attempt with standard update
-      return await forceSessionActivation(sessionId);
+    // Try multiple activation methods in sequence
+    // 1. First try the RPC method
+    const rpcSuccess = await activateSessionViaRPC(sessionId);
+    if (rpcSuccess) {
+      console.log('RPC activation successful');
+      return true;
     }
     
-    return true;
+    // 2. If RPC fails, verify and activate
+    const { exists: verified, isActive, data } = await verifyAttendanceSession(sessionId, true);
+    
+    if (isActive) {
+      console.log('Session is now active after verification');
+      return true;
+    }
+    
+    // 3. Last attempt with forceSessionActivation
+    console.log('Final attempt with force activation');
+    return await forceSessionActivation(sessionId);
+    
   } catch (error) {
     console.error('Error in ensureSessionActive:', error);
-    return false;
+    
+    // Last resort direct update
+    try {
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ 
+          is_active: true, 
+          end_time: null 
+        })
+        .eq('id', sessionId);
+        
+      return !error;
+    } catch (e) {
+      return false;
+    }
   }
 }
