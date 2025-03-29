@@ -30,33 +30,52 @@ const ScanQR = () => {
   // Minimum time between automatic connection checks (15 seconds)
   const CONNECTION_CHECK_THROTTLE = 15000;
 
-  // Check if any active sessions exist
+  // Check if any active sessions exist - improved version with faster timeout
   const checkForActiveSessions = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('attendance_sessions')
-        .select('id')
-        .eq('is_active', true)
-        .limit(1);
+      // Create a timeout for this specific operation
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       
-      if (error) {
-        console.error('Error checking for active sessions:', error);
-        setSessionExists(false);
-        return false;
+      try {
+        const { data, error } = await supabase
+          .from('attendance_sessions')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1)
+          .abortSignal(controller.signal);
+        
+        clearTimeout(timeoutId);
+        
+        if (error) {
+          console.error('Error checking for active sessions:', error);
+          setSessionExists(false);
+          return false;
+        }
+        
+        const hasActiveSessions = data && data.length > 0;
+        console.log('Active sessions check:', hasActiveSessions ? 'Found' : 'None found');
+        setSessionExists(hasActiveSessions);
+        return hasActiveSessions;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+          console.error('Session check timed out');
+          // Don't update state on timeout, just return
+          return sessionExists || false;
+        }
+        
+        console.error('Exception checking for active sessions:', error);
+        return sessionExists || false;
       }
-      
-      const hasActiveSessions = data && data.length > 0;
-      console.log('Active sessions check:', hasActiveSessions ? 'Found' : 'None found');
-      setSessionExists(hasActiveSessions);
-      return hasActiveSessions;
     } catch (error) {
-      console.error('Exception checking for active sessions:', error);
-      setSessionExists(false);
-      return false;
+      console.error('Exception in checkForActiveSessions:', error);
+      return sessionExists || false;
     }
-  }, []);
+  }, [sessionExists]);
 
-  // Enhanced connection check with throttling to prevent repeated checks
+  // Enhanced connection check with throttling and timeout handling
   const checkConnection = useCallback(async (showToasts = true, force = false) => {
     try {
       // Skip if already checking or if scanning is in progress and this is an automatic check
@@ -107,8 +126,15 @@ const ScanQR = () => {
         console.log('Database connection successful');
         checkConnectionRetryCount.current = 0; // Reset retry counter on success
         
-        // Check for active sessions
-        const hasActiveSessions = await checkForActiveSessions();
+        // Check for active sessions with direct database access - faster approach
+        const { data: sessionData, error: sessionError } = await supabase
+          .from('attendance_sessions')
+          .select('count', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .limit(1);
+          
+        const hasActiveSessions = !sessionError && (sessionData?.count || 0) > 0;
+        setSessionExists(hasActiveSessions);
         
         if (showToasts) {
           if (hasActiveSessions) {
@@ -302,6 +328,11 @@ const ScanQR = () => {
           onScanningStateChange={(scanning) => {
             isScanningRef.current = scanning;
             console.log('Scanning state changed:', scanning);
+            
+            // If starting to scan, quickly check for active sessions
+            if (scanning) {
+              checkForActiveSessions();
+            }
           }}
           onScanAttempt={() => {
             setHasAttemptedScan(true);
