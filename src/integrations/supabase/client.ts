@@ -25,21 +25,22 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Connection checking utility with retry logic
+// Optimized connection checking utility
 export const checkConnection = async (): Promise<boolean> => {
   try {
-    console.log('Starting connection check...');
+    console.log('Starting quick connection check...');
     
-    // Use a longer timeout for connection check
+    // Use a shorter timeout for faster response
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 10 seconds');
+      console.log('Connection check timed out after 5 seconds');
       controller.abort();
-    }, 10000);
+    }, 5000); // Reduced from 10 seconds to 5 seconds
     
     // Use a simple count query to check connection
-    const { data, error } = await supabase.from('profiles')
+    const { error } = await supabase.from('profiles')
       .select('count', { count: 'exact', head: true })
+      .limit(1)
       .abortSignal(controller.signal);
     
     clearTimeout(timeoutId);
@@ -49,8 +50,7 @@ export const checkConnection = async (): Promise<boolean> => {
       return false;
     }
     
-    console.log('Main connection check successful');
-    
+    console.log('Connection check successful');
     return true;
   } catch (error) {
     console.error('Connection check exception:', error);

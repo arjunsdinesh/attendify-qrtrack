@@ -29,10 +29,10 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   
   if (status === 'checking') {
     return (
-      <div className="bg-amber-50 p-3 rounded-t-lg border-b border-amber-200">
+      <div className="bg-amber-50 p-2 rounded-t-lg border-b border-amber-200">
         <div className="flex items-center text-amber-700 text-sm">
-          <span className="animate-pulse mr-2">●</span>
-          <span>Checking database connection...</span>
+          <span className="animate-pulse mr-2 transition-all">●</span>
+          <span>Connecting to database...</span>
         </div>
       </div>
     );
@@ -40,10 +40,10 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   
   if (status === 'connected') {
     return (
-      <div className="bg-green-50 p-3 rounded-t-lg border-b border-green-200">
+      <div className="bg-green-50 p-2 rounded-t-lg border-b border-green-200">
         <div className="flex items-center text-green-700 text-sm">
           <CheckCircle className="h-4 w-4 mr-2" />
-          <span>Database connected successfully</span>
+          <span>Database connected</span>
         </div>
       </div>
     );
@@ -51,30 +51,20 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
 
   if (status === 'disconnected') {
     return (
-      <div className="bg-red-50 p-3 rounded-t-lg border-b border-red-200">
+      <div className="bg-red-50 p-2 rounded-t-lg border-b border-red-200">
         <div className="flex items-center text-red-700 text-sm">
           <WifiOff className="h-4 w-4 mr-2" />
           <div className="flex-1">
-            <p>Database connection error. Please check your Supabase configuration.</p>
-            <p className="text-xs mt-1 flex items-center">
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              <span>
-                {retryCount > 2 ? 
-                  "Multiple connection attempts failed. The database may be unavailable." :
-                  retryAttempted ? 
-                    "Connection still failed. Try again or check if Supabase is down." :
-                    "Try using the retry button or check your network connection."}
-              </span>
-            </p>
+            <p>Connection error. Please check your network.</p>
             {onRetry && (
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="mt-2 h-7 text-xs border-red-300 hover:bg-red-100"
+                className="mt-2 h-6 text-xs border-red-300 hover:bg-red-100"
                 onClick={handleRetry}
               >
                 <RefreshCw className="h-3 w-3 mr-1" />
-                Retry Connection {retryCount > 0 ? `(${retryCount})` : ''}
+                Retry {retryCount > 0 ? `(${retryCount})` : ''}
               </Button>
             )}
           </div>

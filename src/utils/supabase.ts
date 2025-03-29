@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Import the values from the working Supabase client configuration
@@ -74,92 +75,59 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Improved connection check with more robust error handling and timeout
+// Faster connection check with shorter timeout and simplified queries
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    console.log('Performing database connection check...');
+    console.log('Performing quick database connection check...');
     
-    // Use AbortController for timeout handling
+    // Create a faster timeout for better responsiveness
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 15 seconds');
+      console.log('Connection check timed out after 6 seconds');
       controller.abort();
-    }, 15000); // Increased to 15 seconds for more reliable checking
+    }, 6000); // Reduced from 15 seconds to 6 seconds
     
     try {
-      // First check attendance_sessions specifically since that's what we need
-      const { error: sessionsError } = await supabase
-        .from('attendance_sessions')
+      // Use a simpler, faster query to check connection
+      const { error } = await supabase
+        .from('profiles')
         .select('count', { count: 'exact', head: true })
-        .eq('is_active', true)
         .limit(1)
         .abortSignal(controller.signal);
       
-      if (!sessionsError) {
-        console.log('Attendance sessions table connection successful');
-        clearTimeout(timeoutId);
-        return true;
-      }
-      
-      console.warn('Could not check attendance sessions, trying profiles table:', sessionsError.message);
-      
-      // Try a simple query first to check database access
-      const { error } = await supabase.from('profiles')
-        .select('count', { count: 'exact', head: true })
-        .abortSignal(controller.signal);
-      
       clearTimeout(timeoutId);
       
-      if (error) {
-        console.error('Database connection check failed:', error.message);
-        
-        // Try a second simple query as fallback
-        const { error: secondError } = await supabase.from('attendance_sessions')
-          .select('count', { count: 'exact', head: true })
-          .limit(1);
-          
-        if (secondError) {
-          console.error('Second database check also failed:', secondError.message);
-          return false;
-        }
-        
-        console.log('Second database check succeeded despite first failure');
+      if (!error) {
+        console.log('Database connection successful');
         return true;
       }
       
-      console.log('Database connection successful');
-      return true;
+      console.warn('Initial connection check failed, trying fallback');
+      
+      // Simple fallback query with no joins
+      const { error: fallbackError } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .limit(1);
+        
+      if (!fallbackError) {
+        console.log('Fallback connection successful');
+        return true;
+      }
+      
+      console.error('Database connection failed after fallback attempt');
+      return false;
+      
     } catch (error: any) {
       clearTimeout(timeoutId);
+      
       if (error.name === 'AbortError') {
         console.error('Database connection timed out');
-      } else {
-        console.error('Database connection error:', error.message);
+        return false;
       }
       
-      // Try one more simple query with different approach
-      try {
-        // Direct query to active sessions
-        const { data, error: fallbackError } = await supabase
-          .from('attendance_sessions')
-          .select('id')
-          .eq('is_active', true)
-          .limit(1);
-        
-        if (!fallbackError) {
-          console.log('Fallback connection check successful');
-          if (data && data.length > 0) {
-            console.log('Found active sessions:', data.length);
-          } else {
-            console.log('Connection successful but no active sessions found');
-          }
-          return true;
-        }
-        return false;
-      } catch (fallbackError) {
-        console.error('Fallback connection check failed:', fallbackError);
-        return false;
-      }
+      console.error('Database connection error:', error.message);
+      return false;
     }
   } catch (error: any) {
     console.error('Exception in database connection check:', error.message);

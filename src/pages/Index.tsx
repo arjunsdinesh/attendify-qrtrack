@@ -24,11 +24,10 @@ const Index = () => {
     try {
       setDbConnected(null); // Set to checking
       
-      // Shorter timeout for UI responsiveness
       const timeoutId = setTimeout(() => {
         console.log('UI timeout for database connection check');
         setConnectionCheckTimeout(true);
-      }, 3000); // 3 second UI timeout
+      }, 2000); // Reduced from 3 seconds to 2 seconds for faster UI feedback
       
       const connected = await checkSupabaseConnection();
       
@@ -37,7 +36,7 @@ const Index = () => {
       setDbConnected(connected);
       if (!connected) {
         console.error('Database connection failed');
-        toast.error('Database connection failed. Please check your configuration or try again later.');
+        toast.error('Database connection failed. Please try again.');
       } else {
         console.log('Database connection successful');
       }
@@ -90,7 +89,6 @@ const Index = () => {
     console.log('Connection timeout state:', connectionCheckTimeout);
   }, [loading, localLoading, dbConnected, connectionCheckTimeout]);
 
-  // If we're still in auth loading state but not in connection timeout, show the spinner
   if (loading && !connectionCheckTimeout && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">

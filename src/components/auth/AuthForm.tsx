@@ -15,22 +15,24 @@ const AuthForm = () => {
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [retryCount, setRetryCount] = useState(0);
 
-  // Check Supabase connection on component mount
+  // Check Supabase connection on component mount - with optimized timing
   useEffect(() => {
     const checkConnection = async () => {
       try {
         const isConnected = await checkSupabaseConnection();
         setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-        if (!isConnected && retryCount === 0) {
-          console.warn("Initial connection check failed");
-        }
       } catch (error) {
         setConnectionStatus('disconnected');
         console.error('Connection check failed:', error);
       }
     };
     
-    checkConnection();
+    // Add a small delay to allow other critical UI elements to load first
+    const timeoutId = setTimeout(() => {
+      checkConnection();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, [retryCount]);
 
   // Retry connection when disconnected
@@ -41,18 +43,14 @@ const AuthForm = () => {
       const isConnected = await checkSupabaseConnection();
       setConnectionStatus(isConnected ? 'connected' : 'disconnected');
       if (isConnected) {
-        toast.success("Connection restored successfully!");
+        toast.success("Connection restored!");
       } else {
-        if (retryCount >= 2) {
-          toast.error("Still unable to connect. The database may be unavailable.");
-        } else {
-          toast.error("Still unable to connect. Please try again later.");
-        }
+        toast.error("Still unable to connect. Please try again.");
       }
     } catch (error) {
       setConnectionStatus('disconnected');
       console.error('Retry connection failed:', error);
-      toast.error("Connection check failed. Please try again later.");
+      toast.error("Connection check failed.");
     }
   };
 
