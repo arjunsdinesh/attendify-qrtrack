@@ -168,67 +168,94 @@ export const verifyAttendanceSession = async (
     
     console.log('Verifying attendance session:', sessionId);
     
-    // First check if the session exists with extended data
+    // First check if the session exists - using the more robust count function first
+    const { count, error: countError } = await supabase
+      .from('attendance_sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('id', sessionId);
+      
+    if (countError) {
+      console.error('Count query error:', countError);
+      // Continue with the normal flow, don't return early
+    } else if ((count || 0) === 0) {
+      console.error('Session not found in count query:', sessionId);
+      // But don't return yet, try the other queries as fallback
+    } else {
+      console.log('Session exists according to count query');
+    }
+    
+    // Then check if the session exists with extended data
     let { data, error } = await fetchSessionExtendedData(sessionId);
     
     if (error) {
       console.error('Error verifying attendance session:', error);
-      return { 
-        exists: false, 
-        isActive: false,
-        error: error.message
-      };
-    }
-    
-    if (!data) {
-      console.log('Attendance session not found. Attempting a second verification:', sessionId);
       
       // Try a simpler query as a fallback
       let { data: retryData, error: retryError } = await fetchSessionBasicData(sessionId);
       
       if (retryError || !retryData) {
-        console.error('Session definitively not found on second attempt:', sessionId);
+        console.error('Session not found on second attempt:', sessionId);
         
-        // Last resort - try one more time with a more direct query
-        const { count, error: countError } = await supabase
-          .from('attendance_sessions')
-          .select('*', { count: 'exact', head: true })
-          .eq('id', sessionId);
+        // If count query succeeded but detailed queries failed
+        if ((count || 0) > 0) {
+          console.log('Using count result as fallback - session exists but details unavailable');
           
-        if (countError || (count || 0) === 0) {
+          // Return basic existence but no details
           return { 
-            exists: false, 
+            exists: true, 
             isActive: false,
-            error: 'Session not found'
+            data: {
+              is_active: false,
+              class_id: '',
+              classes: { name: 'Unknown Class' },
+              id: sessionId
+            },
+            error: 'Session exists but details could not be retrieved'
           };
         }
         
-        // If we got here, the session exists but we couldn't get full details
         return { 
-          exists: true, 
+          exists: false, 
           isActive: false,
-          error: 'Session exists but details could not be retrieved'
+          error: 'Session not found'
         };
       }
       
       // If we get here, we found the session on the second try
       console.log('Session found on second attempt:', retryData);
       
-      // Continue with the found session and get extended data
-      let { data: fullData, error: fullError } = await fetchSessionExtendedData(sessionId);
-        
-      if (fullError || !fullData) {
-        console.log('Got basic session but failed to get full details, proceeding with limited data');
-        // Create a properly shaped data object with default values
-        data = {
-          is_active: retryData.is_active,
-          class_id: '', // Provide default values for required properties
-          classes: { name: 'Unknown Class' },
-          id: retryData.id
+      // Create a properly shaped data object with default values
+      data = {
+        is_active: retryData.is_active,
+        class_id: '', 
+        classes: { name: 'Unknown Class' },
+        id: retryData.id
+      };
+    }
+    
+    if (!data) {
+      console.error('No data returned for session:', sessionId);
+      
+      // Last resort - if count showed it exists but we couldn't get data
+      if ((count || 0) > 0) {
+        return { 
+          exists: true, 
+          isActive: false,
+          data: {
+            is_active: false,
+            class_id: '',
+            classes: { name: 'Unknown Class' },
+            id: sessionId
+          },
+          error: 'Session exists but no data could be retrieved'
         };
-      } else {
-        data = fullData;
       }
+      
+      return { 
+        exists: false, 
+        isActive: false,
+        error: 'Session not found'
+      };
     }
     
     console.log('Session verification result:', data);

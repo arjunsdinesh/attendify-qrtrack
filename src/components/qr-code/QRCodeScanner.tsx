@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession 
 
 interface QRCodeScannerProps {
   onScanningStateChange?: (isScanning: boolean) => void;
-  onScanAttempt?: () => void; // New callback for scan attempts
+  onScanAttempt?: () => void; // Callback for scan attempts
 }
 
 const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerProps) => {
@@ -57,20 +56,21 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
       try {
         console.log(`Verifying session (attempt ${attempt + 1}/${maxRetries + 1}):`, sessionId);
         
-        const sessionExists = await checkSessionExists(sessionId);
-        if (!sessionExists && attempt < maxRetries) {
-          console.log(`Session not found in quick check (attempt ${attempt + 1}), trying again...`);
-          attempt++;
-          await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
-          continue;
-        }
-        
         const { exists, isActive, data, error } = await verifyAttendanceSession(sessionId, true);
         
         if (!exists) {
           console.error(`Session not found (attempt ${attempt + 1}):`, error);
           
-          if (attempt < maxRetries) {
+          const sessionExists = await checkSessionExists(sessionId);
+          if (sessionExists) {
+            console.log(`Session exists in count check but not in detailed check (attempt ${attempt + 1})`);
+            await activateAttendanceSession(sessionId);
+            attempt++;
+            if (attempt <= maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+              continue;
+            }
+          } else if (attempt < maxRetries) {
             attempt++;
             await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
             continue;
@@ -301,7 +301,6 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
       if (lastScanned === data) return;
       setLastScanned(data);
       
-      // Notify parent about scan attempt
       if (onScanAttempt && !hasAttemptedScanRef.current) {
         hasAttemptedScanRef.current = true;
         onScanAttempt();
@@ -360,15 +359,51 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
       }
 
       try {
-        await activateSession(qrData.sessionId);
+        await activateAttendanceSession(qrData.sessionId);
         
         const { verified, data: sessionData, error: verifyError } = await verifySession(qrData.sessionId, 3);
         
         if (!verified) {
-          const errorMessage = verifyError || 'Session verification failed';
-          console.error('Session verification failed:', errorMessage);
-          setError('Attendance session not found or not active. Please ask your teacher to check the QR code.');
-          showToastOnce('error', 'Attendance session not found or not active. Please ask your teacher to check the QR code.', 'session-not-found');
+          const sessionExists = await checkSessionExists(qrData.sessionId);
+          
+          if (sessionExists) {
+            console.log('Final existence check succeeded, proceeding with attendance');
+            setSessionVerified(true);
+            
+            await activateAttendanceSession(qrData.sessionId);
+            
+            const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
+            
+            if (attendanceSuccess) {
+              console.log('Attendance successfully marked despite verification issues!');
+              setRecentlyMarked(true);
+              
+              let classInfo = '';
+              if (sessionData && sessionData.classes) {
+                if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
+                  classInfo = ` for ${sessionData.classes.name}`;
+                }
+              }
+              
+              const successMsg = `Attendance marked successfully${classInfo}!`;
+              setSuccessMessage(successMsg);
+              setTimeout(() => setRecentlyMarked(false), 5000);
+              showToastOnce('success', successMsg, 'attendance-marked');
+              setRetryCount(0);
+              setScanning(false);
+            } else {
+              const errorMessage = verifyError || 'Session verification failed';
+              console.error('Could not mark attendance:', errorMessage);
+              setError('Could not record attendance. Please try again or ask your teacher for help.');
+              showToastOnce('error', 'Could not record attendance. Please try again.', 'mark-failed');
+            }
+          } else {
+            const errorMessage = verifyError || 'Session verification failed';
+            console.error('Session verification failed:', errorMessage);
+            setError('Attendance session not found or not active. Please ask your teacher to check the QR code.');
+            showToastOnce('error', 'Attendance session not found or not active. Please ask your teacher to check the QR code.', 'session-not-found');
+          }
+          
           setProcessing(false);
           processingRef.current = false;
           return;
@@ -377,7 +412,7 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
         console.log('Session verified successfully:', sessionData);
         setSessionVerified(true);
         
-        await activateSession(qrData.sessionId);
+        await activateAttendanceSession(qrData.sessionId);
         
         const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
         
@@ -428,7 +463,6 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
   };
 
   const toggleScanner = () => {
-    // When starting the scanner, notify about scan attempt
     if (!scanning && onScanAttempt && !hasAttemptedScanRef.current) {
       hasAttemptedScanRef.current = true;
       onScanAttempt();
