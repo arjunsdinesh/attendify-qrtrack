@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 
 /**
@@ -309,7 +308,7 @@ export const verifyAttendanceSession = async (
       error: error.message || 'Unknown error'
     };
   }
-};
+}
 
 /**
  * Force activates an attendance session using the most reliable method
@@ -335,7 +334,7 @@ export const activateAttendanceSession = async (sessionId: string): Promise<bool
     console.error('Exception in activateAttendanceSession:', error);
     return false;
   }
-};
+}
 
 /**
  * Direct function to forcefully update a session's status using the most reliable method
@@ -370,7 +369,7 @@ export const forceSessionActivation = async (sessionId: string): Promise<boolean
     console.error('Error in forceSessionActivation:', error);
     return false;
   }
-};
+}
 
 /**
  * Checks if a session exists by ID
@@ -397,4 +396,43 @@ export const checkSessionExists = async (sessionId: string): Promise<boolean> =>
     console.error('Exception in checkSessionExists:', error);
     return false;
   }
-};
+}
+
+/**
+ * Verifies if a session is active and ensures activation
+ * This is a more robust check specifically focused on determining if a session is active
+ * @param sessionId The ID of the attendance session to check
+ * @returns Boolean indicating if session is active after verification
+ */
+export const ensureSessionActive = async (sessionId: string): Promise<boolean> => {
+  try {
+    if (!sessionId) return false;
+    
+    console.log('Ensuring session is active:', sessionId);
+    
+    // Try RPC first as it's most reliable
+    const rpcSuccess = await activateSessionViaRPC(sessionId);
+    if (rpcSuccess) {
+      return true;
+    }
+    
+    // If RPC fails, verify the session exists and is active
+    const { exists, isActive, data } = await verifyAttendanceSession(sessionId, true);
+    
+    if (!exists) {
+      console.error('Session does not exist:', sessionId);
+      return false;
+    }
+    
+    if (!isActive) {
+      console.error('Session exists but is not active:', sessionId);
+      // One last attempt with standard update
+      return await forceSessionActivation(sessionId);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error in ensureSessionActive:', error);
+    return false;
+  }
+}

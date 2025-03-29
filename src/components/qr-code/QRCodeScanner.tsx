@@ -8,7 +8,7 @@ import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { QrCode, X, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession } from '@/utils/sessionUtils';
+import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession, ensureSessionActive } from '@/utils/sessionUtils';
 
 interface QRCodeScannerProps {
   onScanningStateChange?: (isScanning: boolean) => void;
@@ -56,7 +56,24 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
       try {
         console.log(`Verifying session (attempt ${attempt + 1}/${maxRetries + 1}):`, sessionId);
         
-        const { exists, isActive, data, error } = await verifyAttendanceSession(sessionId, true);
+        const isActive = await ensureSessionActive(sessionId);
+        
+        if (!isActive) {
+          console.error(`Failed to activate session (attempt ${attempt + 1})`);
+          attempt++;
+          
+          if (attempt <= maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+            continue;
+          }
+          
+          return { 
+            verified: false, 
+            error: 'Failed to activate session. Please ask your teacher to check the QR code.'
+          };
+        }
+        
+        const { exists, isActive: sessionIsActive, data, error } = await verifyAttendanceSession(sessionId, true);
         
         if (!exists) {
           console.error(`Session not found (attempt ${attempt + 1}):`, error);
@@ -81,21 +98,19 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
         
         console.log(`Session verified (attempt ${attempt + 1}):`, data);
         
-        if (!isActive) {
-          console.log('Session found but not active, force activating...');
-          const activated = await activateAttendanceSession(sessionId);
-          if (!activated) {
-            console.warn('Failed to activate session');
-            
-            const { error: activateError } = await supabase
-              .from('attendance_sessions')
-              .update({ is_active: true, end_time: null })
-              .eq('id', sessionId);
-              
-            if (activateError) {
-              console.error('Final activation attempt failed:', activateError);
-            }
+        if (!sessionIsActive) {
+          console.log('Session found but not active, attempting final activation...');
+          const finalActivation = await activateAttendanceSession(sessionId);
+          
+          if (!finalActivation) {
+            console.error('Final activation attempt failed, session remains inactive');
+            return { 
+              verified: false, 
+              error: 'This session is no longer active. Please ask your teacher to reactivate it.' 
+            };
           }
+          
+          console.log('Final activation successful');
         }
         
         return { verified: true, data };
@@ -180,7 +195,14 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
     }
     
     try {
-      console.log('Marking attendance for session:', sessionId, 'student:', user.id);
+      const isActive = await ensureSessionActive(sessionId);
+      
+      if (!isActive) {
+        console.error('Cannot mark attendance: Session is not active');
+        return false;
+      }
+      
+      console.log('Session confirmed active, marking attendance for session:', sessionId, 'student:', user.id);
       
       const { data: existingRecord, error: checkError } = await supabase
         .from('attendance_records')
@@ -359,7 +381,15 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
       }
 
       try {
-        await activateAttendanceSession(qrData.sessionId);
+        const sessionActive = await ensureSessionActive(qrData.sessionId);
+        if (!sessionActive) {
+          console.error('Session is not active:', qrData.sessionId);
+          setError('This attendance session is not active. Please ask your teacher to reactivate it.');
+          showToastOnce('error', 'This attendance session is not active. Please ask your teacher to reactivate it.', 'inactive-session');
+          setProcessing(false);
+          processingRef.current = false;
+          return;
+        }
         
         const { verified, data: sessionData, error: verifyError } = await verifySession(qrData.sessionId, 3);
         
@@ -412,7 +442,7 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
         console.log('Session verified successfully:', sessionData);
         setSessionVerified(true);
         
-        await activateAttendanceSession(qrData.sessionId);
+        await ensureSessionActive(qrData.sessionId);
         
         const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
         
