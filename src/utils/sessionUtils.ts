@@ -442,18 +442,28 @@ export const forceSessionActivation = async (sessionId: string): Promise<boolean
       activateSessionViaRPC(sessionId),
       
       // Method 2: Direct update
-      supabase
-        .from('attendance_sessions')
-        .update({ is_active: true, end_time: null })
-        .eq('id', sessionId)
-        .select('is_active')
-        .single()
-        .then(({ data }) => !!data?.is_active)
-        .catch(() => false),
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true, end_time: null })
+            .eq('id', sessionId)
+            .select('is_active')
+            .single();
+          return !!data?.is_active;
+        } catch (error) {
+          return false;
+        }
+      })(),
       
       // Method 3: Another RPC attempt after a small delay
-      new Promise(resolve => setTimeout(() => {
-        activateSessionViaRPC(sessionId).then(resolve).catch(() => resolve(false));
+      new Promise(resolve => setTimeout(async () => {
+        try {
+          const result = await activateSessionViaRPC(sessionId);
+          resolve(result);
+        } catch (error) {
+          resolve(false);
+        }
       }, 100))
     ]);
     
@@ -557,11 +567,16 @@ export const ensureSessionActive = async (sessionId: string): Promise<boolean> =
     }
     
     // 2. If RPC fails, verify and activate
-    const { exists: verified, isActive, data } = await verifyAttendanceSession(sessionId, true);
-    
-    if (isActive) {
-      console.log('Session is now active after verification');
-      return true;
+    try {
+      const { exists: verified, isActive, data } = await verifyAttendanceSession(sessionId, true);
+      
+      if (isActive) {
+        console.log('Session is now active after verification');
+        return true;
+      }
+    } catch (error) {
+      console.error('Error during verification step:', error);
+      // Continue to final attempt
     }
     
     // 3. Last attempt with forceSessionActivation
