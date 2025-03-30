@@ -25,7 +25,7 @@ interface LoginFormProps {
 }
 
 const LoginForm = ({ connectionStatus }: LoginFormProps) => {
-  const { signIn, loading } = useAuth();
+  const { signIn, loading: authLoading } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string>('');
@@ -79,6 +79,9 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     }
   };
 
+  // Calculate the actual loading state by combining both states
+  const isLoading = isSubmitting || authLoading;
+
   return (
     <>
       {isEmailNotConfirmed && (
@@ -112,6 +115,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     type="email" 
                     {...field} 
                     className="input-focus-ring"
+                    disabled={isLoading}
                   />
                 </FormControl>
                 <FormMessage />
@@ -130,6 +134,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     type="password" 
                     {...field} 
                     className="input-focus-ring"
+                    disabled={isLoading}
                   />
                 </FormControl>
                 <FormMessage />
@@ -139,9 +144,9 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
           <Button 
             type="submit" 
             className="w-full bg-brand-500 hover:bg-brand-600" 
-            disabled={isSubmitting || loading}
+            disabled={isLoading}
           >
-            {(isSubmitting || loading) ? <LoadingSpinner /> : 'Sign In'}
+            {isLoading ? <LoadingSpinner /> : 'Sign In'}
           </Button>
         </form>
       </Form>
