@@ -25,10 +25,11 @@ interface LoginFormProps {
 }
 
 const LoginForm = ({ connectionStatus }: LoginFormProps) => {
-  const { signIn, loading } = useAuth();
+  const { signIn, loading: authLoading } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Login form handler
   const loginForm = useForm<LoginFormValues>({
@@ -49,6 +50,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     
     setFormError(null);
     setIsEmailNotConfirmed(false);
+    setIsSubmitting(true);
     
     try {
       console.log('Attempting to sign in with:', values.email);
@@ -72,8 +74,15 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
         setFormError(error.message || 'Failed to sign in. Please check your credentials.');
         toast.error('Login failed. Please try again.');
       }
+    } finally {
+      // Always ensure we reset the submitting state
+      setIsSubmitting(false);
     }
   };
+
+  // Calculate the actual loading state by combining both states
+  const isLoading = isSubmitting || authLoading;
+  const isDisabled = connectionStatus === 'checking' || isLoading;
 
   return (
     <>
@@ -108,6 +117,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     type="email" 
                     {...field} 
                     className="input-focus-ring"
+                    disabled={isDisabled}
                   />
                 </FormControl>
                 <FormMessage />
@@ -126,6 +136,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     type="password" 
                     {...field} 
                     className="input-focus-ring"
+                    disabled={isDisabled}
                   />
                 </FormControl>
                 <FormMessage />
@@ -135,9 +146,9 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
           <Button 
             type="submit" 
             className="w-full bg-brand-500 hover:bg-brand-600" 
-            disabled={loading}
+            disabled={isDisabled}
           >
-            {loading ? <LoadingSpinner /> : 'Sign In'}
+            {isLoading ? <LoadingSpinner /> : 'Sign In'}
           </Button>
         </form>
       </Form>

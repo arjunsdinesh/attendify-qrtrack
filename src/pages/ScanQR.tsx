@@ -1,4 +1,3 @@
-
 import { useEffect, memo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -20,43 +19,68 @@ const ScanQR = () => {
   const [scannerKey, setScannerKey] = useState<number>(Date.now());
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
+  const [hasAttemptedScan, setHasAttemptedScan] = useState<boolean>(false);
   const connectionCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkConnectionRetryCount = useRef<number>(0);
+  const isScanningRef = useRef<boolean>(false);
+  const lastConnectionCheckRef = useRef<number>(Date.now());
+  const CONNECTION_CHECK_THROTTLE = 15000;
 
-  // Check if any active sessions exist
   const checkForActiveSessions = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('attendance_sessions')
-        .select('id')
-        .eq('is_active', true)
-        .limit(1);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       
-      if (error) {
-        console.error('Error checking for active sessions:', error);
-        setSessionExists(false);
-        return false;
+      try {
+        const { data, error, count } = await supabase
+          .from('attendance_sessions')
+          .select('id', { count: 'exact' })
+          .eq('is_active', true)
+          .limit(1)
+          .abortSignal(controller.signal);
+        
+        clearTimeout(timeoutId);
+        
+        if (error) {
+          console.error('Error checking for active sessions:', error);
+          setSessionExists(false);
+          return false;
+        }
+        
+        const hasActiveSessions = count ? count > 0 : false;
+        console.log('Active sessions check:', hasActiveSessions ? 'Found' : 'None found');
+        setSessionExists(hasActiveSessions);
+        return hasActiveSessions;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+          console.error('Session check timed out');
+          return sessionExists || false;
+        }
+        
+        console.error('Exception checking for active sessions:', error);
+        return sessionExists || false;
+      }
+    } catch (error) {
+      console.error('Exception in checkForActiveSessions:', error);
+      return sessionExists || false;
+    }
+  }, [sessionExists]);
+
+  const checkConnection = useCallback(async (showToasts = true, force = false) => {
+    try {
+      if (isCheckingConnection || (isScanningRef.current && !force && !showToasts)) return false;
+      
+      const now = Date.now();
+      if (!force && now - lastConnectionCheckRef.current < CONNECTION_CHECK_THROTTLE) {
+        console.log('Connection check throttled - too recent');
+        return connectionStatus || false;
       }
       
-      const hasActiveSessions = data && data.length > 0;
-      console.log('Active sessions check:', hasActiveSessions ? 'Found' : 'None found');
-      setSessionExists(hasActiveSessions);
-      return hasActiveSessions;
-    } catch (error) {
-      console.error('Exception checking for active sessions:', error);
-      setSessionExists(false);
-      return false;
-    }
-  }, []);
-
-  // Enhanced connection check with exponential backoff
-  const checkConnection = useCallback(async (showToasts = true) => {
-    try {
-      if (isCheckingConnection) return false; // Prevent multiple simultaneous checks
-      
       setIsCheckingConnection(true);
+      lastConnectionCheckRef.current = now;
       
-      // Clear any existing timer
       if (connectionCheckTimerRef.current) {
         clearTimeout(connectionCheckTimerRef.current);
         connectionCheckTimerRef.current = null;
@@ -74,32 +98,65 @@ const ScanQR = () => {
           toast.error('Could not connect to the database. Check your internet connection.');
         }
         
-        // Increase retry count and schedule a retry with exponential backoff
-        checkConnectionRetryCount.current += 1;
-        const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
-        
-        console.log(`Scheduling connection retry in ${backoffTime}ms`);
-        connectionCheckTimerRef.current = setTimeout(() => {
-          checkConnection(false); // Don't show toasts for auto-retries
-        }, backoffTime);
+        if (!isScanningRef.current) {
+          checkConnectionRetryCount.current += 1;
+          const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
+          
+          console.log(`Scheduling connection retry in ${backoffTime}ms`);
+          connectionCheckTimerRef.current = setTimeout(() => {
+            checkConnection(false);
+          }, backoffTime);
+        }
         
         return false;
       } else {
         console.log('Database connection successful');
-        checkConnectionRetryCount.current = 0; // Reset retry counter on success
+        checkConnectionRetryCount.current = 0;
         
-        // Check for active sessions
-        const hasActiveSessions = await checkForActiveSessions();
-        
-        if (showToasts) {
-          if (hasActiveSessions) {
-            toast.success('Connected to attendance system. Active sessions available.');
+        try {
+          const { count, error: sessionError } = await supabase
+            .from('attendance_sessions')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_active', true);
+            
+          if (sessionError) {
+            console.log('Count query failed, using direct select');
+            const { data: activeSessionData } = await supabase
+              .from('attendance_sessions')
+              .select('id')
+              .eq('is_active', true)
+              .limit(1);
+              
+            const hasActiveSessions = activeSessionData && activeSessionData.length > 0;
+            setSessionExists(hasActiveSessions);
+            
+            if (showToasts) {
+              if (hasActiveSessions) {
+                toast.success('Connected to attendance system. Active sessions available.');
+              } else if (hasAttemptedScan) {
+                toast.info('Connected to attendance system. Ready to scan QR code.');
+              }
+            }
+            
+            return true;
           } else {
-            toast.info('Connected to attendance system. No active sessions detected.');
+            const hasActiveSessions = (count || 0) > 0;
+            setSessionExists(hasActiveSessions);
+            
+            if (showToasts) {
+              if (hasActiveSessions) {
+                toast.success('Connected to attendance system. Active sessions available.');
+              } else if (hasAttemptedScan) {
+                toast.info('Connected to attendance system. Ready to scan QR code.');
+              }
+            }
+            
+            return true;
           }
+        } catch (error) {
+          console.error('Error checking for sessions:', error);
+          return true;
         }
-        
-        return true;
       }
     } catch (error) {
       console.error('Error checking connection:', error);
@@ -109,62 +166,52 @@ const ScanQR = () => {
         toast.error('Connection error. Please check your internet and try again.');
       }
       
-      // Schedule retry
-      checkConnectionRetryCount.current += 1;
-      const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
-      
-      connectionCheckTimerRef.current = setTimeout(() => {
-        checkConnection(false); // Don't show toasts for auto-retries
-      }, backoffTime);
+      if (!isScanningRef.current) {
+        checkConnectionRetryCount.current += 1;
+        const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
+        
+        connectionCheckTimerRef.current = setTimeout(() => {
+          checkConnection(false);
+        }, backoffTime);
+      }
       
       return false;
     } finally {
       setIsCheckingConnection(false);
     }
-  }, [isCheckingConnection, checkForActiveSessions]);
-  
+  }, [isCheckingConnection, connectionStatus, hasAttemptedScan]);
+
   const resetScanner = useCallback(() => {
     setScannerKey(Date.now());
     toast.info("Scanner reset. Try scanning again.");
   }, []);
-  
-  // Initialize connection check and periodic scanner reset
+
   useEffect(() => {
-    checkConnection();
+    checkConnection(true, true);
     
-    // Set up periodic connection checks
     const connectionPingInterval = setInterval(() => {
-      checkConnection(false); // Silent check
-    }, 30000); // Check every 30 seconds
-    
-    // Also check for active sessions periodically
-    const sessionCheckInterval = setInterval(() => {
-      if (connectionStatus) {
-        checkForActiveSessions();
+      if (!isScanningRef.current) {
+        checkConnection(false);
       }
-    }, 45000); // Check every 45 seconds
+    }, 45000);
     
-    // Set up periodic scanner reset to prevent camera freezes
-    const resetInterval = setInterval(resetScanner, 120000); // Reset every 2 minutes
+    const resetInterval = setInterval(resetScanner, 120000);
     
     return () => {
       if (connectionCheckTimerRef.current) {
         clearTimeout(connectionCheckTimerRef.current);
       }
       clearInterval(connectionPingInterval);
-      clearInterval(sessionCheckInterval);
       clearInterval(resetInterval);
     };
-  }, [resetScanner, checkConnection, checkForActiveSessions, connectionStatus]);
-  
-  // Redirect non-students
+  }, [resetScanner, checkConnection]);
+
   useEffect(() => {
     if (!loading && user && user.role !== 'student') {
       navigate('/');
     }
   }, [user, loading, navigate]);
 
-  // Loading state 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -173,7 +220,6 @@ const ScanQR = () => {
     );
   }
 
-  // Authentication check
   if (!user) {
     return (
       <DashboardLayout>
@@ -200,7 +246,6 @@ const ScanQR = () => {
           ← Back to Dashboard
         </Button>
         
-        {/* Connection Status Indicator */}
         <div className="mb-4">
           {connectionStatus === false && (
             <Alert className="border-red-200 bg-red-50 text-red-800">
@@ -212,7 +257,7 @@ const ScanQR = () => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => checkConnection(true)}
+                  onClick={() => checkConnection(true, true)}
                   disabled={isCheckingConnection}
                 >
                   {isCheckingConnection ? <LoadingSpinner className="h-4 w-4" /> : 'Retry'}
@@ -221,11 +266,11 @@ const ScanQR = () => {
             </Alert>
           )}
           
-          {connectionStatus === true && sessionExists === false && (
+          {connectionStatus === true && sessionExists === false && hasAttemptedScan && (
             <Alert className="border-yellow-200 bg-yellow-50 text-yellow-800">
               <AlertDescription className="flex items-center">
                 <AlertCircle className="h-4 w-4 mr-2" />
-                <span>Connected, but no active attendance sessions found. Ask your teacher to start a session.</span>
+                <span>Ready to scan attendance QR code. Scan when your teacher displays it.</span>
               </AlertDescription>
             </Alert>
           )}
@@ -253,7 +298,7 @@ const ScanQR = () => {
             
             <Button
               onClick={() => {
-                checkConnection(true);
+                checkConnection(true, true);
                 checkForActiveSessions();
               }}
               variant="secondary"
@@ -268,18 +313,25 @@ const ScanQR = () => {
           
           <Alert className="bg-blue-50 border-blue-200 text-blue-700">
             <AlertDescription>
-              If you're having trouble scanning, try these tips:
-              <ul className="list-disc ml-4 mt-1 text-xs">
-                <li>Make sure the QR code is clearly visible</li>
-                <li>Check your internet connection</li>
-                <li>Ask your teacher to refresh their QR code</li>
-                <li>Use the Reset Scanner button if needed</li>
-              </ul>
+              Ready to scan QR code. When your teacher displays the attendance QR code, point your camera at it to scan.
             </AlertDescription>
           </Alert>
         </div>
         
-        <MemoizedQRScanner key={`scanner-${scannerKey}`} />
+        <MemoizedQRScanner 
+          key={`scanner-${scannerKey}`} 
+          onScanningStateChange={(scanning) => {
+            isScanningRef.current = scanning;
+            console.log('Scanning state changed:', scanning);
+            
+            if (scanning) {
+              checkForActiveSessions();
+            }
+          }}
+          onScanAttempt={() => {
+            setHasAttemptedScan(true);
+          }}
+        />
       </div>
     </DashboardLayout>
   );

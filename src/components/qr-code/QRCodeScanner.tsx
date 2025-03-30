@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,9 +8,14 @@ import { LoadingSpinner } from '@/components/ui-components';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { QrCode, X, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession } from '@/utils/sessionUtils';
+import { checkSessionExists, verifyAttendanceSession, activateAttendanceSession, ensureSessionActive } from '@/utils/sessionUtils';
 
-const QRCodeScanner = () => {
+interface QRCodeScannerProps {
+  onScanningStateChange?: (isScanning: boolean) => void;
+  onScanAttempt?: () => void; // Callback for scan attempts
+}
+
+const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerProps) => {
   const { user } = useAuth();
   const [scanning, setScanning] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -24,7 +28,16 @@ const QRCodeScanner = () => {
   const [sessionVerified, setSessionVerified] = useState(false);
   const processingRef = useRef<boolean>(false);
   const scannedSessionIdRef = useRef<string | null>(null);
-  
+  const displayedToastsRef = useRef<Set<string>>(new Set());
+  const hasAttemptedScanRef = useRef<boolean>(false);
+  const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (onScanningStateChange) {
+      onScanningStateChange(scanning);
+    }
+  }, [scanning, onScanningStateChange]);
+
   useEffect(() => {
     if (scanning) {
       setError(null);
@@ -32,7 +45,14 @@ const QRCodeScanner = () => {
     }
   }, [scanning]);
 
-  // Enhanced verification function with retry mechanism and better error handling
+  useEffect(() => {
+    return () => {
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const verifySession = useCallback(async (sessionId: string, maxRetries = 3): Promise<{
     verified: boolean;
     data?: any;
@@ -41,24 +61,52 @@ const QRCodeScanner = () => {
     let attempt = 0;
     scannedSessionIdRef.current = sessionId;
     
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+    }
+    processingTimeoutRef.current = setTimeout(() => {
+      console.log('Processing timeout reached, resetting state');
+      setProcessing(false);
+      processingRef.current = false;
+      setActivationInProgress(false);
+      if (processingRef.current && !successMessage) {
+        setError('Processing took too long. Please try again.');
+      }
+    }, 15000);
+    
     while (attempt <= maxRetries) {
       try {
         console.log(`Verifying session (attempt ${attempt + 1}/${maxRetries + 1}):`, sessionId);
         
-        // First check if session exists to handle early failures quickly
         const sessionExists = await checkSessionExists(sessionId);
-        if (!sessionExists && attempt < maxRetries) {
-          console.log(`Session not found in quick check (attempt ${attempt + 1}), trying again...`);
-          attempt++;
-          await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
-          continue;
+        
+        if (!sessionExists) {
+          console.error(`Session does not exist (attempt ${attempt + 1}):`, sessionId);
+          if (attempt < maxRetries) {
+            attempt++;
+            await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
+            continue;
+          }
+          return { verified: false, error: 'Session not found. Please ask your teacher to check the QR code.' };
         }
         
-        // Use our enhanced utility function to verify the session with force activation
+        await ensureSessionActive(sessionId);
+        
         const { exists, isActive, data, error } = await verifyAttendanceSession(sessionId, true);
         
         if (!exists) {
-          console.error(`Session not found (attempt ${attempt + 1}):`, error);
+          console.error(`Session not found in detailed check (attempt ${attempt + 1}):`, error);
+          
+          const { data: directData, error: directError } = await supabase
+            .from('attendance_sessions')
+            .select('id, is_active, class_id, classes(name)')
+            .eq('id', sessionId)
+            .maybeSingle();
+            
+          if (!directError && directData) {
+            console.log('Found session via direct check after verification failure');
+            return { verified: true, data: directData };
+          }
           
           if (attempt < maxRetries) {
             attempt++;
@@ -69,25 +117,9 @@ const QRCodeScanner = () => {
           return { verified: false, error: 'Session not found. Please ask your teacher to check the QR code.' };
         }
         
-        console.log(`Session verified (attempt ${attempt + 1}):`, data);
-        
-        // Always force activate as an extra step to ensure it's active
         if (!isActive) {
-          console.log('Session found but not active, force activating...');
-          const activated = await activateAttendanceSession(sessionId);
-          if (!activated) {
-            console.warn('Failed to activate session');
-            
-            // One last try with direct update
-            const { error: activateError } = await supabase
-              .from('attendance_sessions')
-              .update({ is_active: true, end_time: null })
-              .eq('id', sessionId);
-              
-            if (activateError) {
-              console.error('Final activation attempt failed:', activateError);
-            }
-          }
+          console.log('Session found but not active, attempting final activation...');
+          await activateAttendanceSession(sessionId);
         }
         
         return { verified: true, data };
@@ -105,7 +137,7 @@ const QRCodeScanner = () => {
     }
     
     return { verified: false, error: 'Failed after multiple attempts' };
-  }, []);
+  }, [successMessage]);
 
   const activateSession = useCallback(async (sessionId: string): Promise<boolean> => {
     if (!sessionId) return false;
@@ -114,7 +146,6 @@ const QRCodeScanner = () => {
     setActivationInProgress(true);
     
     try {
-      // First, verify the session exists
       const { data: sessionData, error: checkError } = await supabase
         .from('attendance_sessions')
         .select('id, is_active')
@@ -133,18 +164,15 @@ const QRCodeScanner = () => {
       
       console.log('Session found, active status:', sessionData.is_active);
       
-      // If already active, return true
       if (sessionData.is_active) {
         return true;
       }
       
-      // Try to activate the session with multiple approaches
       const activated = await activateAttendanceSession(sessionId);
       if (activated) {
         return true;
       }
       
-      // Direct update as fallback
       const { data: activateData, error: activateError } = await supabase
         .from('attendance_sessions')
         .update({ 
@@ -176,9 +204,16 @@ const QRCodeScanner = () => {
     }
     
     try {
-      console.log('Marking attendance for session:', sessionId, 'student:', user.id);
+      const sessionCheck = await checkSessionExists(sessionId);
+      if (!sessionCheck) {
+        console.error('Session does not exist:', sessionId);
+        return false;
+      }
       
-      // First check if attendance is already marked
+      await ensureSessionActive(sessionId);
+      
+      console.log('Session confirmed active, marking attendance for session:', sessionId, 'student:', user.id);
+      
       const { data: existingRecord, error: checkError } = await supabase
         .from('attendance_records')
         .select('id')
@@ -194,14 +229,13 @@ const QRCodeScanner = () => {
       
       if (existingRecord) {
         console.log('Attendance already marked for this session');
-        return true; // Already marked is a success case
+        return true;
       }
       
       console.log('No existing record found, creating new attendance record');
       
       const timestamp = new Date().toISOString();
       
-      // Create the attendance record
       const { data, error } = await supabase
         .from('attendance_records')
         .insert({
@@ -225,43 +259,23 @@ const QRCodeScanner = () => {
       }
       
       console.log('Attendance record successfully created:', data);
-      
-      // Double-check the record was created
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('attendance_records')
-        .select('id')
-        .eq('session_id', sessionId)
-        .eq('student_id', user.id)
-        .maybeSingle();
-      
-      if (verifyError) {
-        console.warn('Verification check error:', verifyError);
-      } else if (!verifyData) {
-        console.warn('Verification failed: Record not found after insert');
-      } else {
-        console.log('Attendance record verified:', verifyData);
-      }
-      
       return true;
     } catch (error) {
       console.error('Unexpected error marking attendance:', error);
       return false;
     }
   }, [user]);
-  
-  // Retry scanning logic when there's an error
+
   const retryScanning = useCallback(() => {
     setError(null);
     setRetryCount(prev => prev + 1);
     
-    // If we have a session ID from a failed attempt, try to verify and activate it again
     if (scannedSessionIdRef.current) {
       const sessionId = scannedSessionIdRef.current;
       
       setActivationInProgress(true);
       console.log('Retrying with session ID:', sessionId);
       
-      // Try to force activate the session
       supabase
         .from('attendance_sessions')
         .update({ is_active: true, end_time: null })
@@ -271,7 +285,6 @@ const QRCodeScanner = () => {
             console.error('Error activating session on retry:', error);
           } else {
             console.log('Successfully activated session on retry');
-            // Restart scanning
             if (scanning) {
               setScanning(false);
               setTimeout(() => setScanning(true), 300);
@@ -282,7 +295,6 @@ const QRCodeScanner = () => {
           setActivationInProgress(false);
         });
     } else {
-      // Just restart scanning
       if (scanning) {
         setScanning(false);
         setTimeout(() => setScanning(true), 300);
@@ -305,11 +317,30 @@ const QRCodeScanner = () => {
       if (lastScanned === data) return;
       setLastScanned(data);
       
+      if (onScanAttempt && !hasAttemptedScanRef.current) {
+        hasAttemptedScanRef.current = true;
+        onScanAttempt();
+      }
+      
       setProcessing(true);
       processingRef.current = true;
       setError(null);
       setSuccessMessage(null);
       setSessionVerified(false);
+      
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+      
+      processingTimeoutRef.current = setTimeout(() => {
+        console.log('Processing timeout reached, resetting state');
+        setProcessing(false);
+        processingRef.current = false;
+        setActivationInProgress(false);
+        if (!successMessage) {
+          setError('Processing took too long. Please try again.');
+        }
+      }, 15000);
       
       console.log('Scanned QR data (raw):', data);
       
@@ -320,6 +351,7 @@ const QRCodeScanner = () => {
       } catch (e) {
         console.error('QR parse error:', e);
         setError('Invalid QR code format. Please scan a valid attendance QR code.');
+        showToastOnce('error', 'Invalid QR code format. Please scan a valid attendance QR code.', 'invalid-qr');
         setProcessing(false);
         processingRef.current = false;
         return;
@@ -328,6 +360,7 @@ const QRCodeScanner = () => {
       if (!qrData.sessionId || !qrData.timestamp) {
         console.error('QR missing required fields:', qrData);
         setError('Invalid QR code format. Please scan a valid attendance QR code.');
+        showToastOnce('error', 'Invalid QR code format. Please scan a valid attendance QR code.', 'missing-fields');
         setProcessing(false);
         processingRef.current = false;
         return;
@@ -336,6 +369,7 @@ const QRCodeScanner = () => {
       const now = Date.now();
       if (qrData.expiresAt && now > qrData.expiresAt) {
         setError('QR code has expired. Please ask your teacher to generate a new QR code.');
+        showToastOnce('error', 'QR code has expired. Please ask your teacher to generate a new QR code.', 'expired-qr');
         setProcessing(false);
         processingRef.current = false;
         return;
@@ -348,78 +382,158 @@ const QRCodeScanner = () => {
       if (!uuidPattern.test(qrData.sessionId)) {
         console.error('Invalid session ID format:', qrData.sessionId);
         setError('Invalid QR code. Session ID format is incorrect.');
+        showToastOnce('error', 'Invalid QR code. Session ID format is incorrect.', 'invalid-uuid');
         setProcessing(false);
         processingRef.current = false;
         return;
       }
 
-      try {
-        // Force activate the session first
-        await activateSession(qrData.sessionId);
+      const { count, error: countError } = await supabase
+        .from('attendance_sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('id', qrData.sessionId);
+
+      if (countError) {
+        console.error('Error checking session existence with count:', countError);
+      } else if (count === 0) {
+        console.error('Session does not exist in initial count check:', qrData.sessionId);
         
-        // Use the enhanced session verification function
-        const { verified, data: sessionData, error: verifyError } = await verifySession(qrData.sessionId, 3);
-        
-        if (!verified) {
-          const errorMessage = verifyError || 'Session verification failed';
-          console.error('Session verification failed:', errorMessage);
-          setError('Attendance session not found or not active. Please ask your teacher to check the QR code.');
+        const { data: directCheckData, error: directCheckError } = await supabase
+          .from('attendance_sessions')
+          .select('id')
+          .eq('id', qrData.sessionId)
+          .maybeSingle();
+          
+        if (directCheckError || !directCheckData) {
+          console.error('Session not found in direct check either:', qrData.sessionId);
+          setError('Attendance session not found. Please ask your teacher to check the QR code.');
+          showToastOnce('error', 'Attendance session not found.', 'session-not-found-initial');
           setProcessing(false);
           processingRef.current = false;
           return;
-        }
-        
-        console.log('Session verified successfully:', sessionData);
-        setSessionVerified(true);
-        
-        // Force activate the session again to ensure it's active
-        await activateSession(qrData.sessionId);
-        
-        const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
-        
-        if (attendanceSuccess) {
-          console.log('Attendance successfully marked!');
-          setRecentlyMarked(true);
-          
-          let classInfo = '';
-          if (sessionData && sessionData.classes) {
-            // Handle different possible structures of the classes data
-            if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
-              classInfo = ` for ${sessionData.classes.name}`;
-            }
-          }
-          
-          setSuccessMessage(`Attendance marked successfully${classInfo}!`);
-          setTimeout(() => setRecentlyMarked(false), 5000);
-          toast.success(`Attendance marked successfully${classInfo}!`);
-          setRetryCount(0);
-          setScanning(false);
         } else {
-          console.error('Failed to mark attendance');
-          setError('Failed to record attendance. Please try again.');
+          console.log('Session found via direct check after count failed');
         }
-      } catch (error: any) {
-        console.error('Error in session handling:', error);
-        setError(`Error: ${error.message || 'Unknown error'}`);
-      } finally {
+      } else {
+        console.log('Session exists in count check, count:', count);
+      }
+
+      setActivationInProgress(true);
+      
+      const directActivation = await supabase
+        .from('attendance_sessions')
+        .update({ is_active: true, end_time: null })
+        .eq('id', qrData.sessionId);
+          
+      console.log('Direct activation result:', directActivation.error ? 'failed' : 'success');
+      
+      const { verified, data: sessionData, error: verifyError } = await verifySession(qrData.sessionId, 3);
+      
+      if (!verified) {
+        const sessionExists = await checkSessionExists(qrData.sessionId);
+        
+        if (sessionExists) {
+          console.log('Final existence check succeeded, proceeding with attendance');
+          setSessionVerified(true);
+          
+          await supabase
+            .from('attendance_sessions')
+            .update({ is_active: true, end_time: null })
+            .eq('id', qrData.sessionId);
+          
+          const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
+          
+          if (attendanceSuccess) {
+            console.log('Attendance successfully marked despite verification issues!');
+            setRecentlyMarked(true);
+            
+            let classInfo = '';
+            if (sessionData && sessionData.classes) {
+              if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
+                classInfo = ` for ${sessionData.classes.name}`;
+              }
+            }
+            
+            const successMsg = `Attendance marked successfully${classInfo}!`;
+            setSuccessMessage(successMsg);
+            setTimeout(() => setRecentlyMarked(false), 5000);
+            showToastOnce('success', successMsg, 'attendance-marked');
+            setRetryCount(0);
+            setScanning(false);
+          } else {
+            const errorMessage = verifyError || 'Session verification failed';
+            console.error('Could not mark attendance:', errorMessage);
+            setError('Could not record attendance. Please try again or ask your teacher for help.');
+            showToastOnce('error', 'Could not record attendance. Please try again.', 'mark-failed');
+          }
+        } else {
+          const errorMessage = verifyError || 'Session verification failed';
+          console.error('Session verification failed:', errorMessage);
+          setError('Attendance session not found or not active. Please ask your teacher to check the QR code.');
+          showToastOnce('error', 'Attendance session not found or not active. Please ask your teacher to check the QR code.', 'session-not-found');
+        }
+        
         setProcessing(false);
         processingRef.current = false;
+        setActivationInProgress(false);
+        return;
+      }
+      
+      console.log('Session verified successfully:', sessionData);
+      setSessionVerified(true);
+      
+      await supabase
+        .from('attendance_sessions')
+        .update({ is_active: true, end_time: null })
+        .eq('id', qrData.sessionId);
+      
+      const attendanceSuccess = await markAttendance(qrData.sessionId, qrData);
+      
+      if (attendanceSuccess) {
+        console.log('Attendance successfully marked!');
+        setRecentlyMarked(true);
+        
+        let classInfo = '';
+        if (sessionData && sessionData.classes) {
+          if (typeof sessionData.classes === 'object' && sessionData.classes !== null && 'name' in sessionData.classes) {
+            classInfo = ` for ${sessionData.classes.name}`;
+          }
+        }
+        
+        const successMsg = `Attendance marked successfully${classInfo}!`;
+        setSuccessMessage(successMsg);
+        setTimeout(() => setRecentlyMarked(false), 5000);
+        showToastOnce('success', successMsg, 'attendance-marked');
+        setRetryCount(0);
+        setScanning(false);
+      } else {
+        console.error('Failed to mark attendance');
+        setError('Failed to record attendance. Please try again.');
+        showToastOnce('error', 'Failed to record attendance. Please try again.', 'mark-failed');
       }
     } catch (error: any) {
       console.error('Error processing QR code:', error);
       setError(error.message || 'Failed to process QR code');
+      showToastOnce('error', error.message || 'Failed to process QR code', 'qr-process-error');
       setProcessing(false);
       processingRef.current = false;
+      setActivationInProgress(false);
     }
   };
 
   const handleError = (error: any) => {
     console.error('QR scanner error:', error);
     setError('Failed to access camera. Please check permissions.');
+    showToastOnce('error', 'Failed to access camera. Please check permissions.', 'camera-error');
     setScanning(false);
   };
 
   const toggleScanner = () => {
+    if (!scanning && onScanAttempt && !hasAttemptedScanRef.current) {
+      hasAttemptedScanRef.current = true;
+      onScanAttempt();
+    }
+    
     setScanning(prev => !prev);
     setError(null);
     setSuccessMessage(null);
@@ -428,6 +542,30 @@ const QRCodeScanner = () => {
       setRetryCount(0);
     }
   };
+
+  const showToastOnce = useCallback((type: 'success' | 'error' | 'info', message: string, key?: string) => {
+    const toastKey = key || message;
+    
+    if (!displayedToastsRef.current.has(toastKey)) {
+      displayedToastsRef.current.add(toastKey);
+      
+      switch (type) {
+        case 'success':
+          toast.success(message);
+          break;
+        case 'error':
+          toast.error(message);
+          break;
+        case 'info':
+          toast.info(message);
+          break;
+      }
+      
+      setTimeout(() => {
+        displayedToastsRef.current.delete(toastKey);
+      }, 10000);
+    }
+  }, []);
 
   return (
     <Card className="w-full max-w-md mx-auto overflow-hidden shadow-lg border border-gray-100">

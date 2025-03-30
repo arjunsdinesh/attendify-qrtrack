@@ -6,16 +6,16 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-// Configure client with optimized options
+// Configure client with optimized options for faster connections
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true, // Enable session detection in URL
-    storageKey: 'supabase.auth.token', // Ensure consistent storage key
+    detectSessionInUrl: true,
+    storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 60000, // Increased timeout for better connection stability
+    timeout: 30000, // Reduced timeout for faster connection detection
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -25,21 +25,36 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Connection checking utility with retry logic
+// Optimized connection checking utility with faster timeout and better retry handling
 export const checkConnection = async (): Promise<boolean> => {
   try {
-    console.log('Starting connection check...');
+    console.log('Starting quick connection check...');
     
-    // Use a longer timeout for connection check
+    // Use a shorter timeout for faster response
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 10 seconds');
+      console.log('Connection check timed out after 2 seconds');
       controller.abort();
-    }, 10000);
+    }, 2000); // Reduced from 3 seconds to 2 seconds for faster feedback
     
-    // Use a simple count query to check connection
-    const { data, error } = await supabase.from('profiles')
+    // First try a simpler, faster query with minimal data to check connection
+    const { error: countError } = await supabase
+      .from('attendance_sessions')
+      .select('*', { count: 'exact', head: true })
+      .limit(1)
+      .abortSignal(controller.signal);
+    
+    if (!countError) {
+      clearTimeout(timeoutId);
+      console.log('Connection check successful via count query');
+      return true;
+    }
+    
+    // If count query fails, try a different approach as fallback
+    const { error } = await supabase
+      .from('profiles')
       .select('count', { count: 'exact', head: true })
+      .limit(1)
       .abortSignal(controller.signal);
     
     clearTimeout(timeoutId);
@@ -49,12 +64,27 @@ export const checkConnection = async (): Promise<boolean> => {
       return false;
     }
     
-    console.log('Main connection check successful');
-    
+    console.log('Connection check successful via profiles');
     return true;
   } catch (error) {
     console.error('Connection check exception:', error);
-    return false;
+    
+    // Try one more approach as last resort with a very simple query
+    try {
+      const { error: lastResortError } = await supabase.rpc('force_activate_session', {
+        session_id: '00000000-0000-0000-0000-000000000000' // Invalid ID but helps test connectivity
+      });
+      
+      // Even if we get an error about invalid UUID, it means the connection worked
+      if (lastResortError && lastResortError.message.includes('invalid input syntax')) {
+        console.log('Last resort connection check successful (expected error but connection works)');
+        return true;
+      }
+      
+      return !lastResortError;
+    } catch (e) {
+      return false;
+    }
   }
 };
 
