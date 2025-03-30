@@ -1,3 +1,4 @@
+
 import React, { Suspense, lazy } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 // Eagerly load critical path components
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import StudentDashboard from "./pages/StudentDashboard"; // Changed from lazy to direct import
+import StudentDashboard from "./pages/StudentDashboard"; 
 
 // Lazily load non-critical components
 const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
@@ -100,27 +101,25 @@ const App = () => (
         <AuthProvider>
           <Toaster />
           <Sonner />
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Index />} />
-            <Route path="/student-dashboard" element={<StudentDashboard />} />
-            <Route path="/student" element={<StudentDashboard />} />
-            <Route path="*" element={
-              <Suspense fallback={<LoadingFallback />}>
-                <Routes>
-                  <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
-                  <Route path="/teacher" element={<TeacherDashboard />} />
-                  <Route path="/scan-qr" element={<ScanQR />} />
-                  <Route path="/create-session" element={<CreateSession />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/attendance-history" element={<AttendanceHistory />} />
-                  <Route path="/attendance-records" element={<AttendanceRecords />} />
-                  <Route path="/manage-classes" element={<ManageClasses />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            } />
-          </Routes>
+          <ErrorBoundary fallback={<ErrorFallback />}>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Index />} />
+                <Route path="/student-dashboard" element={<StudentDashboard />} />
+                <Route path="/student" element={<StudentDashboard />} />
+                <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
+                <Route path="/teacher" element={<TeacherDashboard />} />
+                <Route path="/scan-qr" element={<ScanQR />} />
+                <Route path="/create-session" element={<CreateSession />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/attendance-history" element={<AttendanceHistory />} />
+                <Route path="/attendance-records" element={<AttendanceRecords />} />
+                <Route path="/manage-classes" element={<ManageClasses />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

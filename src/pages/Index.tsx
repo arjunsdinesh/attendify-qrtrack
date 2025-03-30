@@ -1,6 +1,6 @@
 
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui-components';
@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Mail } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ConnectionStatus from '@/components/auth/ConnectionStatus';
+import { Button } from '@/components/ui/button';
 
 const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
 
@@ -156,14 +157,18 @@ const Index = () => {
               <CardContent className="pt-6">
                 <h2 className="text-xl font-semibold mb-4">Create New Session</h2>
                 <p className="text-muted-foreground mb-4">Generate a QR code for your current class session.</p>
-                <button onClick={() => navigate('/create-session')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">Create Session</button>
+                <Button asChild className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">
+                  <Link to="/create-session">Create Session</Link>
+                </Button>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6">
                 <h2 className="text-xl font-semibold mb-4">View Attendance Records</h2>
                 <p className="text-muted-foreground mb-4">Check attendance records for your classes.</p>
-                <button onClick={() => navigate('/attendance-records')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">View Records</button>
+                <Button asChild className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">
+                  <Link to="/attendance-records">View Records</Link>
+                </Button>
               </CardContent>
             </Card>
           </div>
@@ -176,14 +181,18 @@ const Index = () => {
               <CardContent className="pt-6">
                 <h2 className="text-xl font-semibold mb-4">Scan Attendance QR</h2>
                 <p className="text-muted-foreground mb-4">Scan the QR code to mark your attendance.</p>
-                <button onClick={() => navigate('/scan-qr')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">Scan QR Code</button>
+                <Button asChild className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">
+                  <Link to="/scan-qr">Scan QR Code</Link>
+                </Button>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6">
                 <h2 className="text-xl font-semibold mb-4">Your Attendance History</h2>
                 <p className="text-muted-foreground mb-4">View your attendance records.</p>
-                <button onClick={() => navigate('/attendance-history')} className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">View History</button>
+                <Button asChild className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">
+                  <Link to="/attendance-history">View History</Link>
+                </Button>
               </CardContent>
             </Card>
           </div>
