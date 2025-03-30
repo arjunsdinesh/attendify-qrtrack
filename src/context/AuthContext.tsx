@@ -32,13 +32,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Set up the auth state change listener FIRST before checking session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log("Auth state change event:", event);
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN' && session) {
           setLoading(true);
-          await fetchUserProfile(session.user.id);
+          // Use setTimeout to avoid triggering during auth state change directly
+          setTimeout(() => {
+            fetchUserProfile(session.user.id);
+          }, 0);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setStudentProfile(null);
@@ -132,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('profiles')
           .select('role')
           .eq('id', data.user.id)
-          .single();
+          .maybeSingle();
         
         if (profileError) {
           console.error('Error fetching profile after login:', profileError);
@@ -154,13 +157,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         return data;
       }
+      
+      return null; // Return null if no user data
     } catch (error: any) {
       console.error('Sign in error:', error);
       
       if (error.message?.includes('Email not confirmed') || error.code === 'email_not_confirmed') {
         throw error;
       } else {
-        toast.error(error.message || 'Failed to sign in');
         throw error; // Rethrow for component-level handling
       }
     } finally {

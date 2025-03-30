@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -73,16 +72,17 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     
     // Set timeout for faster response
     const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // Increase timeout to 3 seconds
     
     try {
-      setTimeout(() => controller.abort(), 2000); // 2 second timeout
-      
       // Use a simple query to check connection
       const { error } = await supabase
         .from('profiles')
         .select('count', { count: 'exact', head: true })
         .limit(1)
         .abortSignal(controller.signal);
+      
+      clearTimeout(timeoutId);
       
       if (!error) {
         console.log('Database connection successful');
@@ -93,8 +93,10 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       return false;
       
     } catch (error: any) {
+      clearTimeout(timeoutId);
+      
       if (error.name === 'AbortError') {
-        console.log('Assuming connection is OK despite timeout');
+        console.log('Connection check timed out, assuming connection is OK');
         return true; // Assume connection is OK if we time out
       }
       
@@ -107,7 +109,7 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
   }
 };
 
-// Initialize check
+// Initialize check with a slight delay to allow other components to render first
 setTimeout(() => {
   createForceActivateRPC();
-}, 1000);
+}, 1500);
