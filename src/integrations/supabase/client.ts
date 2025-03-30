@@ -16,6 +16,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     detectSessionInUrl: true,
     storageKey: 'supabase.auth.token',
   },
+  global: {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  },
   realtime: {
     params: {
       eventsPerSecond: 10

@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import { Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
