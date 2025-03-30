@@ -54,7 +54,8 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     
     try {
       console.log('Attempting to sign in with:', values.email);
-      await signIn(values.email, values.password);
+      const result = await signIn(values.email, values.password);
+      console.log('Sign in result:', result);
       toast.success('Login successful!');
     } catch (error: any) {
       console.error('Login error:', error);

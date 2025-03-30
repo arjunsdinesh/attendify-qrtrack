@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
 import { toast } from 'sonner';
@@ -8,7 +9,7 @@ interface AuthContextType {
   studentProfile: StudentProfile | null;
   teacherProfile: TeacherProfile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<any>;
   signUp: (email: string, password: string, role: 'student' | 'teacher', fullName: string, registerNumber?: string) => Promise<void>;
   signOut: () => Promise<void>;
   setInitialRole: (role: 'student' | 'teacher') => void;
@@ -29,6 +30,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log("AuthProvider initialized, checking session...");
     let isMounted = true;
     
+    // Set up the auth state change listener FIRST before checking session
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Auth state change event:", event);
+        if (!isMounted) return;
+        
+        if (event === 'SIGNED_IN' && session) {
+          setLoading(true);
+          await fetchUserProfile(session.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setStudentProfile(null);
+          setTeacherProfile(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    // THEN check for existing session
     const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -51,23 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state change event:", event);
-        if (!isMounted) return;
-        
-        if (event === 'SIGNED_IN' && session) {
-          setLoading(true);
-          await fetchUserProfile(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setStudentProfile(null);
-          setTeacherProfile(null);
-          setLoading(false);
-        }
-      }
-    );
-
     return () => {
       isMounted = false;
       subscription.unsubscribe();
@@ -78,9 +81,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log("Fetching profile for user:", userId);
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
-        supabase.from('profiles').select('*').eq('id', userId as any).maybeSingle(),
-        supabase.from('student_profiles').select('*').eq('id', userId as any).maybeSingle(),
-        supabase.from('teacher_profiles').select('*').eq('id', userId as any).maybeSingle()
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('student_profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('teacher_profiles').select('*').eq('id', userId).maybeSingle()
       ]);
       
       if (profileResponse.status === 'fulfilled' && profileResponse.value.data) {
@@ -97,6 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                    teacherResponse.value.data) {
           setTeacherProfile(teacherResponse.value.data as any);
         }
+      } else if (profileResponse.status === 'fulfilled' && profileResponse.value.error) {
+        console.error('Error fetching profile:', profileResponse.value.error);
+        toast.error('Failed to load your profile. Please try logging in again.');
       }
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
@@ -122,11 +128,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         console.log("Authentication successful, fetching profile");
-        const { data: profileData } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', data.user.id as any)
+          .eq('id', data.user.id)
           .single();
+        
+        if (profileError) {
+          console.error('Error fetching profile after login:', profileError);
+          // Continue even if profile fetch fails - auth is still successful
+        }
         
         console.log('Login successful, redirecting based on role:', profileData?.role);
         if (profileData?.role === 'student') {
@@ -135,7 +146,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (profileData?.role === 'teacher') {
           toast.success('Welcome back, teacher!');
           navigate('/teacher-dashboard');
+        } else {
+          // Default fallback
+          toast.success('Welcome back!');
+          navigate('/');
         }
+        
+        return data;
       }
     } catch (error: any) {
       console.error('Sign in error:', error);

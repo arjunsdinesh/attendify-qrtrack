@@ -1,12 +1,13 @@
 
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/integrations/supabase/types';
 
 // Use the values from the working Supabase client configuration
 const SUPABASE_URL = "https://wmhmdacynswuyhzfbptu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtaG1kYWN5bnN3dXloemZicHR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMzNDc1OTIsImV4cCI6MjA1ODkyMzU5Mn0.Aud4g72knt7oIHUTVvce-vUGP9U5_XvZ82r3RhNDPl0";
 
-// Enhanced Supabase client configuration
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+// Enhanced Supabase client configuration with proper TypeScript typing
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -65,7 +66,7 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Simplified connection check function to avoid blocking UI
+// Improved connection check function with better error handling
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('Performing quick database connection check...');
@@ -88,7 +89,7 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
         return true;
       }
       
-      console.warn('Database connection check failed');
+      console.warn('Database connection check failed:', error.message);
       return false;
       
     } catch (error: any) {
