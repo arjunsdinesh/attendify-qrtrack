@@ -29,23 +29,24 @@ async function fetchSessionBasicData(sessionId: string): Promise<{
   data: { id: string; is_active: boolean } | null; 
   error: any 
 }> {
-  // Try with shorter timeout for faster feedback
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  // Use Promise.race with a timeout promise instead of AbortController
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Query timeout')), 3000);
+  });
   
   try {
-    const result = await supabase
-      .from('attendance_sessions')
-      .select('id, is_active')
-      .eq('id', sessionId)
-      .maybeSingle()
-      .abortSignal(controller.signal);
+    const result = await Promise.race([
+      supabase
+        .from('attendance_sessions')
+        .select('id, is_active')
+        .eq('id', sessionId)
+        .maybeSingle(),
+      timeoutPromise
+    ]) as any;
       
-    clearTimeout(timeoutId);
     return result;
-  } catch (e) {
-    clearTimeout(timeoutId);
-    if (e.name === 'AbortError') {
+  } catch (e: any) {
+    if (e.message === 'Query timeout') {
       console.log('Session query timed out, using direct query');
       
       // Try without timeout if aborted
@@ -66,23 +67,24 @@ async function fetchSessionExtendedData(sessionId: string): Promise<{
   data: SessionData | null;
   error: any
 }> {
-  // Try with shorter timeout for faster feedback
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  // Use Promise.race with a timeout promise instead of AbortController
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Query timeout')), 3000);
+  });
   
   try {
-    const result = await supabase
-      .from('attendance_sessions')
-      .select('id, is_active, class_id, classes(name)')
-      .eq('id', sessionId)
-      .maybeSingle()
-      .abortSignal(controller.signal);
+    const result = await Promise.race([
+      supabase
+        .from('attendance_sessions')
+        .select('id, is_active, class_id, classes(name)')
+        .eq('id', sessionId)
+        .maybeSingle(),
+      timeoutPromise
+    ]) as any;
       
-    clearTimeout(timeoutId);
     return result;
-  } catch (e) {
-    clearTimeout(timeoutId);
-    if (e.name === 'AbortError') {
+  } catch (e: any) {
+    if (e.message === 'Query timeout') {
       console.log('Extended session query timed out, trying without timeout');
       
       // Try without timeout if aborted
