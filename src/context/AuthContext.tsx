@@ -108,15 +108,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        if (error.message.includes('Email not confirmed') || error.message === 'Email not confirmed') {
-          console.log('Email not confirmed error:', error);
-          throw error;
-        } else {
-          throw error;
-        }
+        console.error("Sign in error detected:", error.message);
+        throw error;
       }
 
       if (data.user) {
+        console.log("Authentication successful, fetching profile");
         await fetchUserProfile(data.user.id);
         const { data: profileData } = await supabase
           .from('profiles')
@@ -136,14 +133,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Sign in error:', error);
       
+      setLoading(false);
+      
       if (error.message?.includes('Email not confirmed') || error.code === 'email_not_confirmed') {
         throw error;
       } else {
         toast.error(error.message || 'Failed to sign in');
         throw error; // Rethrow for component-level handling
       }
-    } finally {
-      setLoading(false);
     }
   };
 
