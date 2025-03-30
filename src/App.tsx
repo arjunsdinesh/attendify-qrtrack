@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { LoadingSpinner } from "@/components/ui-components";
 import { Button } from "@/components/ui/button";
@@ -14,14 +14,49 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import StudentDashboard from "./pages/StudentDashboard"; 
 
-// Lazily load non-critical components
-const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
-const ScanQR = lazy(() => import("./pages/ScanQR"));
-const CreateSession = lazy(() => import("./pages/CreateSession"));
-const Profile = lazy(() => import("./pages/Profile"));
-const AttendanceHistory = lazy(() => import("./pages/AttendanceHistory"));
-const AttendanceRecords = lazy(() => import("./pages/AttendanceRecords"));
-const ManageClasses = lazy(() => import("./pages/ManageClasses"));
+// Lazily load non-critical components with error handling
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard")
+  .catch(err => {
+    console.error("Failed to load TeacherDashboard:", err);
+    return { default: () => <div>Failed to load TeacherDashboard</div> };
+  })
+);
+const ScanQR = lazy(() => import("./pages/ScanQR")
+  .catch(err => {
+    console.error("Failed to load ScanQR:", err);
+    return { default: () => <div>Failed to load ScanQR</div> };
+  })
+);
+const CreateSession = lazy(() => import("./pages/CreateSession")
+  .catch(err => {
+    console.error("Failed to load CreateSession:", err);
+    return { default: () => <div>Failed to load CreateSession</div> };
+  })
+);
+const Profile = lazy(() => import("./pages/Profile")
+  .catch(err => {
+    console.error("Failed to load Profile:", err);
+    return { default: () => <div>Failed to load Profile</div> };
+  })
+);
+const AttendanceHistory = lazy(() => import("./pages/AttendanceHistory")
+  .catch(err => {
+    console.error("Failed to load AttendanceHistory:", err);
+    return { default: () => <div>Failed to load AttendanceHistory</div> };
+  })
+);
+const AttendanceRecords = lazy(() => import("./pages/AttendanceRecords")
+  .catch(err => {
+    console.error("Failed to load AttendanceRecords:", err);
+    return { default: () => <div>Failed to load AttendanceRecords</div> };
+  })
+);
+const ManageClasses = lazy(() => import("./pages/ManageClasses")
+  .catch(err => {
+    console.error("Failed to load ManageClasses:", err);
+    return { default: () => <div>Failed to load ManageClasses</div> };
+  })
+);
 
 // Configure with larger staleTime to reduce refetches
 const queryClient = new QueryClient({
@@ -68,7 +103,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(): ErrorBoundaryState {
     return { hasError: true };
   }
 
@@ -84,15 +119,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return this.props.children;
   }
 }
-
-// Dynamic import with error boundary
-const withErrorBoundary = (Component: React.ComponentType) => () => {
-  return (
-    <ErrorBoundary fallback={<ErrorFallback />}>
-      <Component />
-    </ErrorBoundary>
-  );
-};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -110,12 +136,36 @@ const App = () => (
                 <Route path="/student" element={<StudentDashboard />} />
                 <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
                 <Route path="/teacher" element={<TeacherDashboard />} />
-                <Route path="/scan-qr" element={<ScanQR />} />
-                <Route path="/create-session" element={<CreateSession />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/attendance-history" element={<AttendanceHistory />} />
-                <Route path="/attendance-records" element={<AttendanceRecords />} />
-                <Route path="/manage-classes" element={<ManageClasses />} />
+                <Route path="/scan-qr" element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ScanQR />
+                  </Suspense>
+                } />
+                <Route path="/create-session" element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <CreateSession />
+                  </Suspense>
+                } />
+                <Route path="/profile" element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <Profile />
+                  </Suspense>
+                } />
+                <Route path="/attendance-history" element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <AttendanceHistory />
+                  </Suspense>
+                } />
+                <Route path="/attendance-records" element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <AttendanceRecords />
+                  </Suspense>
+                } />
+                <Route path="/manage-classes" element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ManageClasses />
+                  </Suspense>
+                } />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
