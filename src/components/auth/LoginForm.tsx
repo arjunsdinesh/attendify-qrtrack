@@ -115,7 +115,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     type="email" 
                     {...field} 
                     className="input-focus-ring"
-                    disabled={isLoading}
+                    disabled={connectionStatus === 'checking' || isLoading}
                   />
                 </FormControl>
                 <FormMessage />
@@ -134,7 +134,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     type="password" 
                     {...field} 
                     className="input-focus-ring"
-                    disabled={isLoading}
+                    disabled={connectionStatus === 'checking' || isLoading}
                   />
                 </FormControl>
                 <FormMessage />
@@ -144,7 +144,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
           <Button 
             type="submit" 
             className="w-full bg-brand-500 hover:bg-brand-600" 
-            disabled={isLoading}
+            disabled={connectionStatus === 'checking' || isLoading}
           >
             {isLoading ? <LoadingSpinner /> : 'Sign In'}
           </Button>

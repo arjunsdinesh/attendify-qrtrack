@@ -35,16 +35,17 @@ const AuthForm = () => {
         
         console.log("Starting actual connection check");
         const isConnected = await checkSupabaseConnection();
+        
+        if (!isMounted) return;
+        
         clearTimeout(connectionTimeout);
         
-        if (isMounted) {
-          console.log("Connection check result:", isConnected ? "connected" : "disconnected");
-          setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-          setIsLoading(false);
-          
-          if (!isConnected && isMounted) {
-            toast.error("Database connection issue. Please check your network connection.");
-          }
+        console.log("Connection check result:", isConnected ? "connected" : "disconnected");
+        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+        setIsLoading(false);
+        
+        if (!isConnected && isMounted) {
+          toast.error("Database connection issue. Please check your network connection.");
         }
       } catch (error) {
         if (isMounted) {
@@ -84,14 +85,18 @@ const AuthForm = () => {
           />
         )}
         
-        <Tabs value={authMode} onValueChange={(value) => setAuthMode(value as 'login' | 'register')}>
+        <Tabs 
+          value={authMode} 
+          onValueChange={(value) => setAuthMode(value as 'login' | 'register')}
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>
             <TabsTrigger value="register">Register</TabsTrigger>
           </TabsList>
           
           {/* Login Form */}
-          <TabsContent value="login">
+          <TabsContent value="login" className="w-full">
             <CardHeader>
               <CardTitle className="text-2xl">Welcome back</CardTitle>
               <CardDescription>
@@ -104,7 +109,7 @@ const AuthForm = () => {
           </TabsContent>
           
           {/* Register Form */}
-          <TabsContent value="register">
+          <TabsContent value="register" className="w-full">
             <CardHeader>
               <CardTitle className="text-2xl">Create an account</CardTitle>
               <CardDescription>
