@@ -1,5 +1,6 @@
 
 import { Suspense, lazy } from 'react';
+import * as React from 'react'; // Using proper React import for class components
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { LoadingSpinner } from "@/components/ui-components";
+import { Button } from "@/components/ui/button"; // Import Button for the ErrorFallback component
 
 // Eagerly load critical path components
 import Index from "./pages/Index";
@@ -50,8 +52,42 @@ const ErrorFallback = () => (
   </div>
 );
 
+// Define correct props interface for the ErrorBoundary component
+interface ErrorBoundaryProps {
+  fallback: React.ReactNode;
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+// Error boundary component with proper TypeScript types
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Component Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+
 // Dynamic import with error boundary
-const withErrorBoundary = (Component) => () => {
+const withErrorBoundary = (Component: React.ComponentType) => () => {
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
       <Component />
@@ -92,29 +128,5 @@ const App = () => (
     </TooltipProvider>
   </QueryClientProvider>
 );
-
-// Error boundary component
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("Component Error:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-
-    return this.props.children;
-  }
-}
 
 export default App;
