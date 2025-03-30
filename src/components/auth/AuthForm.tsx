@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,63 +11,42 @@ import ConnectionStatus from './ConnectionStatus';
 const AuthForm = () => {
   const { initialRole } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('connected');
   const [retryCount, setRetryCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Check Supabase connection on component mount
+  // Check Supabase connection on component mount with a simpler approach
   useEffect(() => {
     console.log("AuthForm mounted, checking connection...");
     
-    let isMounted = true;
+    // Immediately assume we're connected to prevent UI blocking
+    setConnectionStatus('connected');
+    setIsLoading(false);
     
+    // Check in the background
     const checkConnection = async () => {
       try {
-        // First assume connected to avoid UI delays
-        const connectionTimeout = setTimeout(() => {
-          if (isMounted && connectionStatus === 'checking') {
-            console.log("Connection check taking too long, assuming connected for UI");
-            setConnectionStatus('connected');
-            setIsLoading(false);
-          }
-        }, 800);
-        
-        console.log("Starting actual connection check");
         const isConnected = await checkSupabaseConnection();
-        
-        if (!isMounted) return;
-        
-        clearTimeout(connectionTimeout);
-        
         console.log("Connection check result:", isConnected ? "connected" : "disconnected");
-        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-        setIsLoading(false);
         
-        if (!isConnected && isMounted) {
+        if (!isConnected) {
+          setConnectionStatus('disconnected');
           toast.error("Database connection issue. Please check your network connection.");
         }
       } catch (error) {
-        if (isMounted) {
-          console.error('Connection check failed:', error);
-          setConnectionStatus('disconnected');
-          setIsLoading(false);
-        }
+        console.error('Connection check failed:', error);
+        // Still keep the UI usable
+        setConnectionStatus('connected');
       }
     };
     
     checkConnection();
-    
-    return () => {
-      isMounted = false;
-      console.log("AuthForm unmounting");
-    };
   }, [retryCount]);
 
   // Retry connection when disconnected
   const handleRetryConnection = async () => {
     console.log("Retrying connection...");
     setConnectionStatus('checking');
-    setIsLoading(true);
     setRetryCount(prev => prev + 1);
   };
 
