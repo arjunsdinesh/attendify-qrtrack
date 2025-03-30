@@ -1,4 +1,3 @@
-
 import { useEffect, memo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -48,7 +47,6 @@ const ScanQR = () => {
           return false;
         }
         
-        // Use count directly from the response
         const hasActiveSessions = count ? count > 0 : false;
         console.log('Active sessions check:', hasActiveSessions ? 'Found' : 'None found');
         setSessionExists(hasActiveSessions);
@@ -115,23 +113,50 @@ const ScanQR = () => {
         console.log('Database connection successful');
         checkConnectionRetryCount.current = 0;
         
-        const { count, error: sessionError } = await supabase
-          .from('attendance_sessions')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true);
-          
-        const hasActiveSessions = !sessionError && (count || 0) > 0;
-        setSessionExists(hasActiveSessions);
-        
-        if (showToasts) {
-          if (hasActiveSessions) {
-            toast.success('Connected to attendance system. Active sessions available.');
-          } else if (hasAttemptedScan) {
-            toast.info('Connected to attendance system. No active sessions detected.');
+        try {
+          const { count, error: sessionError } = await supabase
+            .from('attendance_sessions')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_active', true);
+            
+          if (sessionError) {
+            console.log('Count query failed, using direct select');
+            const { data: activeSessionData } = await supabase
+              .from('attendance_sessions')
+              .select('id')
+              .eq('is_active', true)
+              .limit(1);
+              
+            const hasActiveSessions = activeSessionData && activeSessionData.length > 0;
+            setSessionExists(hasActiveSessions);
+            
+            if (showToasts) {
+              if (hasActiveSessions) {
+                toast.success('Connected to attendance system. Active sessions available.');
+              } else if (hasAttemptedScan) {
+                toast.info('Connected to attendance system. Ready to scan QR code.');
+              }
+            }
+            
+            return true;
+          } else {
+            const hasActiveSessions = (count || 0) > 0;
+            setSessionExists(hasActiveSessions);
+            
+            if (showToasts) {
+              if (hasActiveSessions) {
+                toast.success('Connected to attendance system. Active sessions available.');
+              } else if (hasAttemptedScan) {
+                toast.info('Connected to attendance system. Ready to scan QR code.');
+              }
+            }
+            
+            return true;
           }
+        } catch (error) {
+          console.error('Error checking for sessions:', error);
+          return true;
         }
-        
-        return true;
       }
     } catch (error) {
       console.error('Error checking connection:', error);
@@ -154,7 +179,7 @@ const ScanQR = () => {
     } finally {
       setIsCheckingConnection(false);
     }
-  }, [isCheckingConnection, checkForActiveSessions, connectionStatus, hasAttemptedScan]);
+  }, [isCheckingConnection, connectionStatus, hasAttemptedScan]);
 
   const resetScanner = useCallback(() => {
     setScannerKey(Date.now());
@@ -245,7 +270,7 @@ const ScanQR = () => {
             <Alert className="border-yellow-200 bg-yellow-50 text-yellow-800">
               <AlertDescription className="flex items-center">
                 <AlertCircle className="h-4 w-4 mr-2" />
-                <span>No active attendance sessions found. Ask your teacher to start a session.</span>
+                <span>Ready to scan attendance QR code. Scan when your teacher displays it.</span>
               </AlertDescription>
             </Alert>
           )}
@@ -288,13 +313,7 @@ const ScanQR = () => {
           
           <Alert className="bg-blue-50 border-blue-200 text-blue-700">
             <AlertDescription>
-              If you're having trouble scanning, try these tips:
-              <ul className="list-disc ml-4 mt-1 text-xs">
-                <li>Make sure the QR code is clearly visible</li>
-                <li>Check your internet connection</li>
-                <li>Ask your teacher to refresh their QR code</li>
-                <li>Use the Reset Scanner button if needed</li>
-              </ul>
+              Ready to scan QR code. When your teacher displays the attendance QR code, point your camera at it to scan.
             </AlertDescription>
           </Alert>
         </div>
