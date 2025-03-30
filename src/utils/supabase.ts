@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Import the values from the working Supabase client configuration
@@ -25,28 +26,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     schema: 'public'
   }
 });
-
-// Create the force_activate_session RPC if it doesn't exist
-const createForceActivateRPC = async () => {
-  try {
-    // Check if the function exists by calling it with a dummy value
-    const { error } = await supabase.rpc('force_activate_session', { 
-      session_id: '00000000-0000-0000-0000-000000000000' 
-    });
-    
-    // If we get a specific error about session not found, that means the function exists
-    if (error && (error.message.includes('no rows') || error.code === 'PGRST116')) {
-      console.log('force_activate_session function exists and is accessible');
-    } else if (error && error.message.includes('function') && error.message.includes('does not exist')) {
-      console.warn('force_activate_session function does not exist, please create it in the Supabase SQL editor');
-    }
-  } catch (error) {
-    console.error('Error checking RPC function:', error);
-  }
-};
-
-// Call this function when the app initializes
-createForceActivateRPC();
 
 // Type definitions needed for the application
 export interface Profile {

@@ -6,12 +6,12 @@ import { QRGenerator } from './QRGenerator';
 import { SessionForm } from './SessionForm';
 import { useSearchParams } from 'react-router-dom';
 import { LoadingSpinner } from '@/components/ui-components';
-import { forceSessionActivation } from '@/utils/sessionUtils';
 
 interface SessionControlsProps {
   userId: string;
 }
 
+// Define the expected shape of classes data from Supabase
 interface ClassData {
   name: string;
   [key: string]: any;
@@ -30,33 +30,40 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   const [isLoadingClasses, setIsLoadingClasses] = useState<boolean>(false);
   const [checkingActiveSession, setCheckingActiveSession] = useState<boolean>(true);
 
+  // Function to attempt to activate a session by its ID
   const checkForActiveSession = async () => {
     if (!userId) return;
       
     try {
       setCheckingActiveSession(true);
       
+      // Check if the teacher has any active sessions
       const { data, error } = await supabase
         .from('attendance_sessions')
         .select('id, class_id, classes(name)')
-        .eq('created_by', userId)
-        .eq('is_active', true)
+        .eq('created_by', userId as any)
+        .eq('is_active', true as any)
         .maybeSingle();
       
       if (error) throw error;
       
+      // If an active session exists, restore it
       if (data) {
         console.log('Found active session:', data);
         setSessionId(data?.id);
         setClassId(data?.class_id);
         
+        // Extract class name - safely handling the type
         if (data?.classes) {
           let classNameValue = 'Unknown Class';
           
+          // Handle case where it might be an array due to Supabase join
           if (Array.isArray(data.classes)) {
             const firstClass = data.classes[0] as ClassData | undefined;
             classNameValue = firstClass?.name || 'Unknown Class';
-          } else if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
+          } 
+          // Handle case where it's a single object
+          else if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
             classNameValue = (data.classes as ClassData).name;
           }
           
@@ -67,45 +74,36 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setActive(true);
 
-        // Use RPC to ensure the session stays active
-        const { error: rpcError } = await supabase.rpc('force_activate_session', {
-          session_id: data.id
-        });
+        // Force activate the session to ensure it's truly active
+        const { error: activateError } = await supabase
+          .from('attendance_sessions')
+          .update({ 
+            is_active: true as any,
+            end_time: null 
+          } as any)
+          .eq('id', data.id as any);
         
-        if (rpcError) {
-          console.error('Error ensuring session activation via RPC:', rpcError);
-          
-          // Fall back to standard update if RPC fails
-          const { error: activateError } = await supabase
-            .from('attendance_sessions')
-            .update({ 
-              is_active: true,
-              end_time: null 
-            })
-            .eq('id', data.id);
-          
-          if (activateError) {
-            console.error('Error ensuring session activation via update:', activateError);
-          } else {
-            console.log('Session activation reinforced via update');
-          }
-        } else {
-          console.log('Session activation reinforced via RPC');
-        }
+      if (activateError) {
+        console.error('Error ensuring session activation:', activateError);
       } else {
-        console.log('No active sessions found');
+        console.log('Session activation reinforced');
       }
-    } catch (error: any) {
-      console.error('Error checking active sessions:', error);
-    } finally {
-      setCheckingActiveSession(false);
+    } else {
+      console.log('No active sessions found');
     }
-  };
+  } catch (error: any) {
+    console.error('Error checking active sessions:', error);
+  } finally {
+    setCheckingActiveSession(false);
+  }
+};
 
+  // Check for an active session when component mounts
   useEffect(() => {
     checkForActiveSession();
   }, [userId]);
 
+  // Fetch teacher's classes when component mounts
   useEffect(() => {
     const fetchClasses = async () => {
       if (!userId) return;
@@ -122,6 +120,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setClasses(data || []);
         
+        // If we have a preselected class ID, set the class name as well
         if (preselectedClassId && data) {
           const selectedClass = data.find(c => c.id === preselectedClassId);
           if (selectedClass) {
@@ -139,12 +138,14 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     fetchClasses();
   }, [userId, preselectedClassId]);
 
+  // Generate a cryptographically secure random secret
   const generateSecret = () => {
     const array = new Uint32Array(4);
     crypto.getRandomValues(array);
     return Array.from(array, x => x.toString(16)).join('');
   };
 
+  // Start generating QR codes - enhanced with better activation assurance
   const startQRGenerator = async (selectedClassId: string, selectedClassName: string) => {
     try {
       if (!selectedClassId) {
@@ -161,20 +162,22 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
-      // Deactivate any existing active sessions
+      // First, properly deactivate any existing active sessions for this teacher
       const { error: deactivateError } = await supabase
         .from('attendance_sessions')
         .update({ 
-          is_active: false, 
+          is_active: false as any, 
           end_time: new Date().toISOString() 
-        })
-        .eq('created_by', userId)
-        .eq('is_active', true);
+        } as any)
+        .eq('created_by', userId as any)
+        .eq('is_active', true as any);
         
       if (deactivateError) {
         console.error('Error deactivating existing sessions:', deactivateError);
+        // Continue anyway, as this is not a critical error
       }
       
+      // Generate a new secret for this session
       const secret = generateSecret();
       
       console.log('Creating new session with:', {
@@ -185,17 +188,17 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         is_active: true
       });
       
-      // Create the new session with is_active explicitly set to true
+      // Create a new session with is_active explicitly set to true
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
-          created_by: userId,
+          created_by: userId as any,
           class_id: selectedClassId,
           qr_secret: secret,
-          is_active: true,
+          is_active: true as any,
           start_time: new Date().toISOString(),
           date: new Date().toISOString().split('T')[0]
-        })
+        } as any)
         .select()
         .single();
       
@@ -210,37 +213,45 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       console.log('Session created successfully:', data);
       
-      // Use the RPC function to ensure activation - most reliable method
-      await supabase.rpc('force_activate_session', {
-        session_id: data.id
-      }).then(({ error }) => {
-        if (error) {
-          console.error('RPC activation failed during session creation:', error);
-        } else {
-          console.log('RPC activation succeeded during session creation');
-        }
-      });
+      // Double-check that the session is active with retry logic
+      let isSessionActive = false;
+      const maxRetries = 3;
+      let retryCount = 0;
       
-      // Verify session is properly activated
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('attendance_sessions')
-        .select('id, is_active')
-        .eq('id', data.id)
-        .single();
-        
-      if (verifyError) {
-        console.error('Error verifying session activation:', verifyError);
-      } else {
-        console.log('Session activation verified:', verifyData);
-        
-        // If verification shows session is not active, try once more
-        if (!verifyData.is_active) {
-          console.warn('Session not active after creation and RPC, trying once more');
+      while (!isSessionActive && retryCount < maxRetries) {
+        const { data: checkData, error: checkError } = await supabase
+          .from('attendance_sessions')
+          .select('is_active')
+          .eq('id', data.id)
+          .single();
           
-          // Use the dedicated utility function for reliable activation
-          const activated = await forceSessionActivation(data.id);
-          console.log('Final activation attempt result:', activated);
+        if (checkError) {
+          console.error(`Error checking session status (attempt ${retryCount + 1}):`, checkError);
+        } else {
+          console.log(`Session active status (attempt ${retryCount + 1}):`, checkData?.is_active);
+          if (checkData?.is_active) {
+            isSessionActive = true;
+            break;
+          } else {
+            // If not active, try to update it and wait briefly
+            console.log(`Session not active, attempting to activate (attempt ${retryCount + 1})...`);
+            const { error: updateError } = await supabase
+              .from('attendance_sessions')
+              .update({ is_active: true as any })
+              .eq('id', data.id);
+              
+            if (updateError) {
+              console.error(`Error updating session status (attempt ${retryCount + 1}):`, updateError);
+            }
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
         }
+        retryCount++;
+      }
+      
+      if (!isSessionActive) {
+        console.warn('Could not verify session as active after multiple attempts');
       }
       
       setSessionId(data.id);
@@ -255,18 +266,20 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     }
   };
 
+  // Stop generating QR codes
   const stopQRGenerator = async () => {
     try {
       if (!sessionId) return;
       
       setIsLoading(true);
       
+      // Update the session to mark it as inactive
       const { error } = await supabase
         .from('attendance_sessions')
         .update({ 
           is_active: false, 
           end_time: new Date().toISOString() 
-        })
+        } as any)
         .eq('id', sessionId as any);
       
       if (error) throw error;

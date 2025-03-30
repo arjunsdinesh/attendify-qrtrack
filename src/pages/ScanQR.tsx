@@ -20,15 +20,8 @@ const ScanQR = () => {
   const [scannerKey, setScannerKey] = useState<number>(Date.now());
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
-  const [hasAttemptedScan, setHasAttemptedScan] = useState<boolean>(false);
   const connectionCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkConnectionRetryCount = useRef<number>(0);
-  // Add a flag to prevent duplicate connection checks while scanning
-  const isScanningRef = useRef<boolean>(false);
-  // Track when the last connection check was performed
-  const lastConnectionCheckRef = useRef<number>(Date.now());
-  // Minimum time between automatic connection checks (15 seconds)
-  const CONNECTION_CHECK_THROTTLE = 15000;
 
   // Check if any active sessions exist
   const checkForActiveSessions = useCallback(async () => {
@@ -56,21 +49,12 @@ const ScanQR = () => {
     }
   }, []);
 
-  // Enhanced connection check with throttling to prevent repeated checks
-  const checkConnection = useCallback(async (showToasts = true, force = false) => {
+  // Enhanced connection check with exponential backoff
+  const checkConnection = useCallback(async (showToasts = true) => {
     try {
-      // Skip if already checking or if scanning is in progress and this is an automatic check
-      if (isCheckingConnection || (isScanningRef.current && !force && !showToasts)) return false;
-      
-      // Throttle connection checks to prevent too many requests
-      const now = Date.now();
-      if (!force && now - lastConnectionCheckRef.current < CONNECTION_CHECK_THROTTLE) {
-        console.log('Connection check throttled - too recent');
-        return connectionStatus || false;
-      }
+      if (isCheckingConnection) return false; // Prevent multiple simultaneous checks
       
       setIsCheckingConnection(true);
-      lastConnectionCheckRef.current = now;
       
       // Clear any existing timer
       if (connectionCheckTimerRef.current) {
@@ -91,16 +75,13 @@ const ScanQR = () => {
         }
         
         // Increase retry count and schedule a retry with exponential backoff
-        // Only if we're not currently scanning
-        if (!isScanningRef.current) {
-          checkConnectionRetryCount.current += 1;
-          const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
-          
-          console.log(`Scheduling connection retry in ${backoffTime}ms`);
-          connectionCheckTimerRef.current = setTimeout(() => {
-            checkConnection(false); // Don't show toasts for auto-retries
-          }, backoffTime);
-        }
+        checkConnectionRetryCount.current += 1;
+        const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
+        
+        console.log(`Scheduling connection retry in ${backoffTime}ms`);
+        connectionCheckTimerRef.current = setTimeout(() => {
+          checkConnection(false); // Don't show toasts for auto-retries
+        }, backoffTime);
         
         return false;
       } else {
@@ -113,8 +94,7 @@ const ScanQR = () => {
         if (showToasts) {
           if (hasActiveSessions) {
             toast.success('Connected to attendance system. Active sessions available.');
-          } else if (hasAttemptedScan) {
-            // Only show this toast if user has tried to scan something
+          } else {
             toast.info('Connected to attendance system. No active sessions detected.');
           }
         }
@@ -129,21 +109,19 @@ const ScanQR = () => {
         toast.error('Connection error. Please check your internet and try again.');
       }
       
-      // Schedule retry only if not scanning
-      if (!isScanningRef.current) {
-        checkConnectionRetryCount.current += 1;
-        const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
-        
-        connectionCheckTimerRef.current = setTimeout(() => {
-          checkConnection(false); // Don't show toasts for auto-retries
-        }, backoffTime);
-      }
+      // Schedule retry
+      checkConnectionRetryCount.current += 1;
+      const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
+      
+      connectionCheckTimerRef.current = setTimeout(() => {
+        checkConnection(false); // Don't show toasts for auto-retries
+      }, backoffTime);
       
       return false;
     } finally {
       setIsCheckingConnection(false);
     }
-  }, [isCheckingConnection, checkForActiveSessions, connectionStatus, hasAttemptedScan]);
+  }, [isCheckingConnection, checkForActiveSessions]);
   
   const resetScanner = useCallback(() => {
     setScannerKey(Date.now());
@@ -152,15 +130,19 @@ const ScanQR = () => {
   
   // Initialize connection check and periodic scanner reset
   useEffect(() => {
-    // Initial connection check
-    checkConnection(true, true);
+    checkConnection();
     
-    // Set up periodic connection checks - less frequent
+    // Set up periodic connection checks
     const connectionPingInterval = setInterval(() => {
-      if (!isScanningRef.current) {  // Only check when not scanning
-        checkConnection(false); // Silent check
+      checkConnection(false); // Silent check
+    }, 30000); // Check every 30 seconds
+    
+    // Also check for active sessions periodically
+    const sessionCheckInterval = setInterval(() => {
+      if (connectionStatus) {
+        checkForActiveSessions();
       }
-    }, 45000); // Reduced frequency to check every 45 seconds
+    }, 45000); // Check every 45 seconds
     
     // Set up periodic scanner reset to prevent camera freezes
     const resetInterval = setInterval(resetScanner, 120000); // Reset every 2 minutes
@@ -170,9 +152,10 @@ const ScanQR = () => {
         clearTimeout(connectionCheckTimerRef.current);
       }
       clearInterval(connectionPingInterval);
+      clearInterval(sessionCheckInterval);
       clearInterval(resetInterval);
     };
-  }, [resetScanner, checkConnection]);
+  }, [resetScanner, checkConnection, checkForActiveSessions, connectionStatus]);
   
   // Redirect non-students
   useEffect(() => {
@@ -229,7 +212,7 @@ const ScanQR = () => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => checkConnection(true, true)}
+                  onClick={() => checkConnection(true)}
                   disabled={isCheckingConnection}
                 >
                   {isCheckingConnection ? <LoadingSpinner className="h-4 w-4" /> : 'Retry'}
@@ -238,12 +221,11 @@ const ScanQR = () => {
             </Alert>
           )}
           
-          {/* Only show the "no active sessions" alert if a scan has been attempted */}
-          {connectionStatus === true && sessionExists === false && hasAttemptedScan && (
+          {connectionStatus === true && sessionExists === false && (
             <Alert className="border-yellow-200 bg-yellow-50 text-yellow-800">
               <AlertDescription className="flex items-center">
                 <AlertCircle className="h-4 w-4 mr-2" />
-                <span>No active attendance sessions found. Ask your teacher to start a session.</span>
+                <span>Connected, but no active attendance sessions found. Ask your teacher to start a session.</span>
               </AlertDescription>
             </Alert>
           )}
@@ -271,7 +253,7 @@ const ScanQR = () => {
             
             <Button
               onClick={() => {
-                checkConnection(true, true);
+                checkConnection(true);
                 checkForActiveSessions();
               }}
               variant="secondary"
@@ -297,16 +279,7 @@ const ScanQR = () => {
           </Alert>
         </div>
         
-        <MemoizedQRScanner 
-          key={`scanner-${scannerKey}`} 
-          onScanningStateChange={(scanning) => {
-            isScanningRef.current = scanning;
-            console.log('Scanning state changed:', scanning);
-          }}
-          onScanAttempt={() => {
-            setHasAttemptedScan(true);
-          }}
-        />
+        <MemoizedQRScanner key={`scanner-${scannerKey}`} />
       </div>
     </DashboardLayout>
   );

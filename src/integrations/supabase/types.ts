@@ -233,12 +233,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      force_activate_session: {
-        Args: {
-          session_id: string
-        }
-        Returns: boolean
-      }
       is_teacher: {
         Args: Record<PropertyKey, never>
         Returns: boolean
