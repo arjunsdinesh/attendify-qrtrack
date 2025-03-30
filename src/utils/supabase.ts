@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,14 +29,14 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Improved connection check function with better error handling and faster timeout
+// Faster connection check function with better error handling and quicker timeout
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('Performing quick database connection check...');
     
     // Set timeout for faster response
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5 seconds timeout - reduced from 3s
+    const timeoutId = setTimeout(() => controller.abort(), 800); // Reduced from 1500ms to 800ms for faster response
     
     try {
       // Use a simple query to check connection
@@ -97,4 +98,4 @@ export { supabase };
 // Initialize check with a slight delay to allow other components to render first
 setTimeout(() => {
   createForceActivateRPC();
-}, 2000); // Increased from 1500ms to 2000ms to prioritize UI loading first
+}, 3000); // Increased from 2000ms to 3000ms to further prioritize UI loading first

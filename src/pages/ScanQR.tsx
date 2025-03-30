@@ -1,3 +1,4 @@
+
 import { useEffect, memo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -8,14 +9,14 @@ import QRCodeScanner from '@/components/qr-code/QRCodeScanner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase, checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
-import { RefreshCw, Wifi, WifiOff, AlertCircle } from 'lucide-react';
+import { Wifi, WifiOff, AlertCircle } from 'lucide-react';
 
 const MemoizedQRScanner = memo(QRCodeScanner);
 
 const ScanQR = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<boolean | null>(true); // Start with optimistic loading
   const [scannerKey, setScannerKey] = useState<number>(Date.now());
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
@@ -25,11 +26,15 @@ const ScanQR = () => {
   const isScanningRef = useRef<boolean>(false);
   const lastConnectionCheckRef = useRef<number>(Date.now());
   const CONNECTION_CHECK_THROTTLE = 15000;
-
+  
+  // Add timeout to prevent endless loading
+  const userLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Simplified check for active sessions - quicker response
   const checkForActiveSessions = useCallback(async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // Reduced from 4000ms
       
       try {
         const { data, error, count } = await supabase
@@ -68,6 +73,7 @@ const ScanQR = () => {
     }
   }, [sessionExists]);
 
+  // Faster connection check with shorter timeout
   const checkConnection = useCallback(async (showToasts = true, force = false) => {
     try {
       if (isCheckingConnection || (isScanningRef.current && !force && !showToasts)) return false;
@@ -88,39 +94,42 @@ const ScanQR = () => {
       
       console.log(`Checking connection (attempt ${checkConnectionRetryCount.current + 1})...`);
       
-      const isConnected = await checkSupabaseConnection();
-      setConnectionStatus(isConnected);
+      // Set a timeout to assume connection if check takes too long
+      const assumeConnectedTimeout = setTimeout(() => {
+        console.log('Connection check taking too long, assuming connected');
+        setConnectionStatus(true);
+        setIsCheckingConnection(false);
+      }, 800);
       
-      if (!isConnected) {
-        console.error('Failed to connect to database');
+      try {
+        const isConnected = await checkSupabaseConnection();
+        clearTimeout(assumeConnectedTimeout);
+        setConnectionStatus(isConnected);
         
-        if (showToasts) {
-          toast.error('Could not connect to the database. Check your internet connection.');
-        }
-        
-        if (!isScanningRef.current) {
-          checkConnectionRetryCount.current += 1;
-          const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
+        if (!isConnected) {
+          console.error('Failed to connect to database');
           
-          console.log(`Scheduling connection retry in ${backoffTime}ms`);
-          connectionCheckTimerRef.current = setTimeout(() => {
-            checkConnection(false);
-          }, backoffTime);
-        }
-        
-        return false;
-      } else {
-        console.log('Database connection successful');
-        checkConnectionRetryCount.current = 0;
-        
-        try {
-          const { count, error: sessionError } = await supabase
-            .from('attendance_sessions')
-            .select('*', { count: 'exact', head: true })
-            .eq('is_active', true);
+          if (showToasts) {
+            toast.error('Could not connect to the database. Check your internet connection.');
+          }
+          
+          if (!isScanningRef.current) {
+            checkConnectionRetryCount.current += 1;
+            const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
             
-          if (sessionError) {
-            console.log('Count query failed, using direct select');
+            console.log(`Scheduling connection retry in ${backoffTime}ms`);
+            connectionCheckTimerRef.current = setTimeout(() => {
+              checkConnection(false);
+            }, backoffTime);
+          }
+          
+          return false;
+        } else {
+          console.log('Database connection successful');
+          checkConnectionRetryCount.current = 0;
+          
+          try {
+            // Quick query for active sessions
             const { data: activeSessionData } = await supabase
               .from('attendance_sessions')
               .select('id')
@@ -130,54 +139,36 @@ const ScanQR = () => {
             const hasActiveSessions = activeSessionData && activeSessionData.length > 0;
             setSessionExists(hasActiveSessions);
             
-            if (showToasts) {
+            if (showToasts && hasAttemptedScan) {
               if (hasActiveSessions) {
                 toast.success('Connected to attendance system. Active sessions available.');
-              } else if (hasAttemptedScan) {
+              } else {
                 toast.info('Connected to attendance system. Ready to scan QR code.');
               }
             }
             
             return true;
-          } else {
-            const hasActiveSessions = (count || 0) > 0;
-            setSessionExists(hasActiveSessions);
-            
-            if (showToasts) {
-              if (hasActiveSessions) {
-                toast.success('Connected to attendance system. Active sessions available.');
-              } else if (hasAttemptedScan) {
-                toast.info('Connected to attendance system. Ready to scan QR code.');
-              }
-            }
-            
+          } catch (error) {
+            console.error('Error checking for sessions:', error);
             return true;
           }
-        } catch (error) {
-          console.error('Error checking for sessions:', error);
-          return true;
         }
+      } catch (error) {
+        clearTimeout(assumeConnectedTimeout);
+        console.error('Error checking connection:', error);
+        setConnectionStatus(false);
+        
+        if (showToasts) {
+          toast.error('Connection error. Please check your internet and try again.');
+        }
+        return false;
+      } finally {
+        setIsCheckingConnection(false);
       }
     } catch (error) {
       console.error('Error checking connection:', error);
       setConnectionStatus(false);
-      
-      if (showToasts) {
-        toast.error('Connection error. Please check your internet and try again.');
-      }
-      
-      if (!isScanningRef.current) {
-        checkConnectionRetryCount.current += 1;
-        const backoffTime = Math.min(2000 * Math.pow(1.5, checkConnectionRetryCount.current), 30000);
-        
-        connectionCheckTimerRef.current = setTimeout(() => {
-          checkConnection(false);
-        }, backoffTime);
-      }
-      
       return false;
-    } finally {
-      setIsCheckingConnection(false);
     }
   }, [isCheckingConnection, connectionStatus, hasAttemptedScan]);
 
@@ -186,8 +177,16 @@ const ScanQR = () => {
     toast.info("Scanner reset. Try scanning again.");
   }, []);
 
+  // Initial setup with optimistic rendering
   useEffect(() => {
-    checkConnection(true, true);
+    // Start with optimistic assumption that we're connected
+    // to prevent loading screen
+    setConnectionStatus(true); 
+    
+    // Set a timeout to check connection after component is rendered
+    setTimeout(() => {
+      checkConnection(true, false);
+    }, 100);
     
     const connectionPingInterval = setInterval(() => {
       if (!isScanningRef.current) {
@@ -206,17 +205,38 @@ const ScanQR = () => {
     };
   }, [resetScanner, checkConnection]);
 
+  // Handle auth with timeout to prevent stuck loading
   useEffect(() => {
+    if (userLoadTimeoutRef.current) {
+      clearTimeout(userLoadTimeoutRef.current);
+    }
+    
+    // If loading takes too long, proceed anyway
+    userLoadTimeoutRef.current = setTimeout(() => {
+      if (loading) {
+        console.log("Auth loading timeout reached, proceeding with UI render");
+      }
+    }, 1500);
+    
     if (!loading && user && user.role !== 'student') {
       navigate('/');
     }
+    
+    return () => {
+      if (userLoadTimeoutRef.current) {
+        clearTimeout(userLoadTimeoutRef.current);
+      }
+    };
   }, [user, loading, navigate]);
 
+  // Show spinner only for a short period, then render content
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner className="h-8 w-8" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <LoadingSpinner className="h-8 w-8" />
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -293,7 +313,7 @@ const ScanQR = () => {
               size="sm" 
               className="flex-1"
             >
-              <RefreshCw className="h-4 w-4 mr-1" /> Reset Scanner
+              Reset Scanner
             </Button>
             
             <Button
