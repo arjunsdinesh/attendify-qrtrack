@@ -14,8 +14,8 @@ if (!rootElement) {
     console.log("Initializing React application...");
     const root = createRoot(rootElement);
     
-    // Clear the loading indicator
-    rootElement.innerHTML = '';
+    // Make sure to clear any loading HTML that might be present
+    // This ensures we don't have duplicate content
     
     root.render(
       <React.StrictMode>
