@@ -29,6 +29,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
   const [formError, setFormError] = useState<string | null>(null);
   const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Login form handler
   const loginForm = useForm<LoginFormValues>({
@@ -49,6 +50,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     
     setFormError(null);
     setIsEmailNotConfirmed(false);
+    setIsSubmitting(true);
     
     try {
       console.log('Attempting to sign in with:', values.email);
@@ -72,6 +74,8 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
         setFormError(error.message || 'Failed to sign in. Please check your credentials.');
         toast.error('Login failed. Please try again.');
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -135,9 +139,9 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
           <Button 
             type="submit" 
             className="w-full bg-brand-500 hover:bg-brand-600" 
-            disabled={loading}
+            disabled={isSubmitting || loading}
           >
-            {loading ? <LoadingSpinner /> : 'Sign In'}
+            {(isSubmitting || loading) ? <LoadingSpinner /> : 'Sign In'}
           </Button>
         </form>
       </Form>
