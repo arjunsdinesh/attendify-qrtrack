@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { LoadingSpinner } from "@/components/ui-components";
-import { Button } from "@/components/ui/button"; // Import Button for the ErrorFallback component
+import { Button } from "@/components/ui/button";
 
 // Eagerly load critical path components
 import Index from "./pages/Index";
