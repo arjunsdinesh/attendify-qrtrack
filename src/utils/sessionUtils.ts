@@ -1,5 +1,4 @@
-
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from './supabase';
 
 /**
  * Type definition for the session data structure
@@ -221,7 +220,7 @@ export const verifyAttendanceSession = async (
       console.error('Session not found in count query:', sessionId);
       // But don't return yet, try the other queries as fallback
     } else {
-      console.log('Session exists according to count query, count:', count);
+      console.log('Session exists according to count query');
     }
     
     // Then check if the session exists with extended data
@@ -509,43 +508,31 @@ export const checkSessionExists = async (sessionId: string): Promise<boolean> =>
   try {
     if (!sessionId) return false;
     
-    // Try multiple approaches to detect session existence
-    // 1. First try count approach (most efficient)
-    const { count, error: countError } = await supabase
+    // Use count mode for efficient checking
+    const { count, error } = await supabase
       .from('attendance_sessions')
       .select('*', { count: 'exact', head: true })
       .eq('id', sessionId);
       
-    if (!countError) {
-      return (count || 0) > 0;
-    }
-    
-    console.error('Count check failed, trying fallback:', countError);
-    
-    // 2. Try specific id check if count fails
-    const { data, error } = await supabase
-      .from('attendance_sessions')
-      .select('id')
-      .eq('id', sessionId)
-      .maybeSingle();
-      
     if (error) {
-      console.error('Fallback session check failed:', error);
+      console.error('Error checking if session exists:', error);
       
-      // 3. One final attempt with different approach
-      try {
-        const { data: finalCheckData } = await supabase
-          .rpc('force_activate_session', { session_id: sessionId });
-          
-        // If the RPC succeeded (returned true), the session must exist
-        return !!finalCheckData;
-      } catch (e) {
-        console.error('Final session existence check failed:', e);
+      // Fallback to a simple query if count fails
+      const { data, error: fallbackError } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .maybeSingle();
+        
+      if (fallbackError) {
+        console.error('Fallback query failed:', fallbackError);
         return false;
       }
+      
+      return !!data;
     }
     
-    return !!data;
+    return (count || 0) > 0;
   } catch (error) {
     console.error('Exception in checkSessionExists:', error);
     return false;
@@ -564,7 +551,7 @@ export const ensureSessionActive = async (sessionId: string): Promise<boolean> =
     
     console.log('Ensuring session is active:', sessionId);
     
-    // Check if session exists first using an efficient method
+    // Check if session exists first
     const exists = await checkSessionExists(sessionId);
     if (!exists) {
       console.error('Session does not exist:', sessionId);
@@ -573,15 +560,10 @@ export const ensureSessionActive = async (sessionId: string): Promise<boolean> =
     
     // Try multiple activation methods in sequence
     // 1. First try the RPC method
-    try {
-      const rpcSuccess = await activateSessionViaRPC(sessionId);
-      if (rpcSuccess) {
-        console.log('RPC activation successful');
-        return true;
-      }
-    } catch (error) {
-      console.error('Error during RPC activation:', error);
-      // Continue to next method
+    const rpcSuccess = await activateSessionViaRPC(sessionId);
+    if (rpcSuccess) {
+      console.log('RPC activation successful');
+      return true;
     }
     
     // 2. If RPC fails, verify and activate

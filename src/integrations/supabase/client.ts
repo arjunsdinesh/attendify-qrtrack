@@ -6,7 +6,7 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://ushmvfuczmqjjtwnqebp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaG12ZnVjem1xamp0d25xZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyNzUwNzYsImV4cCI6MjA1Njg1MTA3Nn0.XJ-Xt_WOcu1Jbx6qFrMfJ265mPxNFo5dwj0eQb-PUUQ";
 
-// Configure client with optimized options for faster connections and better session handling
+// Configure client with optimized options for faster connections
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,
@@ -15,7 +15,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storageKey: 'supabase.auth.token',
   },
   realtime: {
-    timeout: 5000, // Further reduced timeout for faster connections
+    timeout: 30000, // Reduced timeout for faster connection detection
   },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -25,19 +25,19 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Optimized connection checking utility with better error handling
+// Optimized connection checking utility with faster timeout
 export const checkConnection = async (): Promise<boolean> => {
   try {
-    console.log('Performing quick database connection check...');
+    console.log('Starting quick connection check...');
     
-    // Fast connection check with minimal query
+    // Use a shorter timeout for faster response
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Database connection check timed out');
+      console.log('Connection check timed out after 3 seconds');
       controller.abort();
-    }, 2000); // Reduced timeout for faster feedback
+    }, 3000); // Reduced from 5 seconds to 3 seconds
     
-    // Use a lightweight query for faster response
+    // Use a simpler, faster query to check connection
     const { error } = await supabase
       .from('profiles')
       .select('count', { count: 'exact', head: true })
@@ -47,17 +47,17 @@ export const checkConnection = async (): Promise<boolean> => {
     clearTimeout(timeoutId);
     
     if (error) {
-      console.error('Database connection check failed:', error);
+      console.error('Connection check failed with error:', error);
       return false;
     }
     
-    console.log('Database connection successful');
+    console.log('Connection check successful');
     return true;
   } catch (error) {
-    console.error('Database connection check exception:', error);
+    console.error('Connection check exception:', error);
     return false;
   }
 };
 
-// Specific function to check Supabase connection
+// Export a more specific function to check Supabase connection
 export const checkSupabaseConnection = checkConnection;
