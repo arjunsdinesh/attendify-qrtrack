@@ -51,13 +51,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    // Add a timeout to prevent hanging at loading screen
+    // Add a shorter timeout to prevent hanging at loading screen
     const loadingTimeout = setTimeout(() => {
       if (isMounted && loading) {
         console.log("Session check timeout reached, assuming no session");
         setLoading(false);
       }
-    }, 2000);
+    }, 1000); // Reduced from 2000ms to 1000ms
 
     // THEN check for existing session
     const getSession = async () => {
@@ -96,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fetchTimeout = setTimeout(() => {
         setLoading(false);
         console.log("Profile fetch timeout reached");
-      }, 3000);
+      }, 2000); // Reduced from 3000ms to 2000ms
       
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),

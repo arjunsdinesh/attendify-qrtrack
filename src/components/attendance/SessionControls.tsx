@@ -29,6 +29,18 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   const [classes, setClasses] = useState<any[]>([]);
   const [isLoadingClasses, setIsLoadingClasses] = useState<boolean>(false);
   const [checkingActiveSession, setCheckingActiveSession] = useState<boolean>(true);
+  const [initialLoadTimeout, setInitialLoadTimeout] = useState<boolean>(false);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setInitialLoadTimeout(true);
+      if (checkingActiveSession) {
+        setCheckingActiveSession(false);
+      }
+    }, 1500);
+    
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   const checkForActiveSession = async () => {
     if (!userId) return;
@@ -79,7 +91,13 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   };
 
   useEffect(() => {
-    checkForActiveSession();
+    if (userId) {
+      setTimeout(() => {
+        checkForActiveSession();
+      }, 100);
+    } else {
+      setCheckingActiveSession(false);
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -112,7 +130,9 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       }
     };
     
-    fetchClasses();
+    if (userId) {
+      fetchClasses();
+    }
   }, [userId, preselectedClassId]);
 
   const generateSecret = () => {
@@ -262,7 +282,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     }
   };
 
-  if (checkingActiveSession) {
+  if (checkingActiveSession && !initialLoadTimeout) {
     return (
       <Card className="w-full">
         <CardContent className="flex items-center justify-center py-12">

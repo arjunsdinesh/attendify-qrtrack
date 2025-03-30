@@ -36,7 +36,7 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     
     // Set timeout for faster response
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 800); // Reduced from 1500ms to 800ms for faster response
+    const timeoutId = setTimeout(() => controller.abort(), 500); // Reduced from 800ms to 500ms for faster response
     
     try {
       // Use a simple query to check connection
@@ -98,4 +98,4 @@ export { supabase };
 // Initialize check with a slight delay to allow other components to render first
 setTimeout(() => {
   createForceActivateRPC();
-}, 3000); // Increased from 2000ms to 3000ms to further prioritize UI loading first
+}, 5000); // Increased from 3000ms to 5000ms to further prioritize UI loading first
