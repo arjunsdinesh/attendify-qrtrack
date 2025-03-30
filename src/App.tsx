@@ -11,9 +11,9 @@ import { LoadingSpinner } from "@/components/ui-components";
 // Eagerly load critical path components
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import StudentDashboard from "./pages/StudentDashboard"; // Changed from lazy to direct import
 
 // Lazily load non-critical components
-const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
 const ScanQR = lazy(() => import("./pages/ScanQR"));
 const CreateSession = lazy(() => import("./pages/CreateSession"));
@@ -40,6 +40,25 @@ const LoadingFallback = () => (
   </div>
 );
 
+// Error fallback component
+const ErrorFallback = () => (
+  <div className="min-h-screen flex items-center justify-center flex-col">
+    <div className="text-red-500 mb-4">Failed to load the page</div>
+    <Button onClick={() => window.location.reload()}>
+      Try Again
+    </Button>
+  </div>
+);
+
+// Dynamic import with error boundary
+const withErrorBoundary = (Component) => () => {
+  return (
+    <ErrorBoundary fallback={<ErrorFallback />}>
+      <Component />
+    </ErrorBoundary>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -50,12 +69,12 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Index />} />
+            <Route path="/student-dashboard" element={<StudentDashboard />} />
+            <Route path="/student" element={<StudentDashboard />} />
             <Route path="*" element={
               <Suspense fallback={<LoadingFallback />}>
                 <Routes>
-                  <Route path="/student-dashboard" element={<StudentDashboard />} />
                   <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
-                  <Route path="/student" element={<StudentDashboard />} />
                   <Route path="/teacher" element={<TeacherDashboard />} />
                   <Route path="/scan-qr" element={<ScanQR />} />
                   <Route path="/create-session" element={<CreateSession />} />
@@ -73,5 +92,29 @@ const App = () => (
     </TooltipProvider>
   </QueryClientProvider>
 );
+
+// Error boundary component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Component Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
 
 export default App;
