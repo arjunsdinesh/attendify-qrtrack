@@ -6,7 +6,7 @@ import { QRGenerator } from './QRGenerator';
 import { SessionForm } from './SessionForm';
 import { useSearchParams } from 'react-router-dom';
 import { LoadingSpinner } from '@/components/ui-components';
-import { forceSessionActivation } from '@/utils/sessionUtils';
+import { forceSessionActivation, ensureSessionActive } from '@/utils/sessionUtils';
 
 interface SessionControlsProps {
   userId: string;
@@ -67,44 +67,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setActive(true);
 
-        try {
-          const { error: rpcError } = await supabase.rpc('force_activate_session', {
-            session_id: data.id
-          });
-          
-          if (rpcError) {
-            console.error('Error ensuring session activation via RPC:', rpcError);
-            
-            const activated = await forceSessionActivation(data.id);
-            
-            if (!activated) {
-              const { error: activateError } = await supabase
-                .from('attendance_sessions')
-                .update({ 
-                  is_active: true,
-                  end_time: null 
-                })
-                .eq('id', data.id);
-              
-              if (activateError) {
-                console.error('All session activation methods failed:', activateError);
-              } else {
-                console.log('Session activation reinforced via direct update');
-              }
-            } else {
-              console.log('Session activation reinforced via utility function');
-            }
-          } else {
-            console.log('Session activation reinforced via RPC');
-          }
-        } catch (activationError) {
-          console.error('Error during session activation:', activationError);
-          
-          await supabase
-            .from('attendance_sessions')
-            .update({ is_active: true, end_time: null })
-            .eq('id', data.id);
-        }
+        await ensureSessionActive(data.id);
       } else {
         console.log('No active sessions found');
       }
@@ -224,14 +187,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       try {
         await supabase.rpc('force_activate_session', {
           session_id: data.id
-        }).then(({ error }) => {
-          if (error) {
-            console.error('RPC activation failed during session creation:', error);
-            return false;
-          } else {
-            console.log('RPC activation succeeded during session creation');
-            return true;
-          }
         });
         
         await forceSessionActivation(data.id);

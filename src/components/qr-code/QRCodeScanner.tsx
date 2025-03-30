@@ -78,28 +78,8 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
       try {
         console.log(`Verifying session (attempt ${attempt + 1}/${maxRetries + 1}):`, sessionId);
         
-        const { count, error: countError } = await supabase
-          .from('attendance_sessions')
-          .select('*', { count: 'exact', head: true })
-          .eq('id', sessionId);
-
-        let sessionExists = false;
-        if (!countError && count && count > 0) {
-          console.log(`Session exists (count method): ${sessionId}`);
-          sessionExists = true;
-        } else {
-          const { data: directCheck, error: directError } = await supabase
-            .from('attendance_sessions')
-            .select('id')
-            .eq('id', sessionId)
-            .maybeSingle();
-              
-          if (!directError && directCheck) {
-            console.log(`Session exists (direct method): ${sessionId}`);
-            sessionExists = true;
-          }
-        }
-
+        const sessionExists = await checkSessionExists(sessionId);
+        
         if (!sessionExists) {
           console.error(`Session does not exist (attempt ${attempt + 1}):`, sessionId);
           if (attempt < maxRetries) {
@@ -110,35 +90,9 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
           return { verified: false, error: 'Session not found. Please ask your teacher to check the QR code.' };
         }
         
-        const isActive = await ensureSessionActive(sessionId);
+        await ensureSessionActive(sessionId);
         
-        if (!isActive) {
-          console.error(`Failed to activate session (attempt ${attempt + 1})`);
-          
-          const { error } = await supabase
-            .from('attendance_sessions')
-            .update({ is_active: true, end_time: null })
-            .eq('id', sessionId);
-              
-          if (error) {
-            console.error('Direct activation failed:', error);
-            attempt++;
-            
-            if (attempt <= maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 300 * attempt)); // Backoff
-              continue;
-            }
-            
-            return { 
-              verified: false, 
-              error: 'Failed to activate session. Please ask your teacher to check the QR code.'
-            };
-          } else {
-            console.log('Direct update successful in fallback');
-          }
-        }
-        
-        const { exists, isActive: sessionIsActive, data, error } = await verifyAttendanceSession(sessionId, true);
+        const { exists, isActive, data, error } = await verifyAttendanceSession(sessionId, true);
         
         if (!exists) {
           console.error(`Session not found in detailed check (attempt ${attempt + 1}):`, error);
@@ -163,32 +117,9 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
           return { verified: false, error: 'Session not found. Please ask your teacher to check the QR code.' };
         }
         
-        console.log(`Session verified (attempt ${attempt + 1}):`, data);
-        
-        if (!sessionIsActive) {
+        if (!isActive) {
           console.log('Session found but not active, attempting final activation...');
-          const finalActivation = await activateAttendanceSession(sessionId);
-          
-          if (!finalActivation) {
-            console.error('Final activation attempt failed, trying direct update');
-            
-            const { error } = await supabase
-              .from('attendance_sessions')
-              .update({ is_active: true, end_time: null })
-              .eq('id', sessionId);
-              
-            if (error) {
-              console.error('Direct update also failed:', error);
-              return { 
-                verified: false, 
-                error: 'This session is no longer active. Please ask your teacher to reactivate it.' 
-              };
-            } else {
-              console.log('Direct update successful after activation failure');
-            }
-          } else {
-            console.log('Final activation successful');
-          }
+          await activateAttendanceSession(sessionId);
         }
         
         return { verified: true, data };
@@ -279,20 +210,7 @@ const QRCodeScanner = ({ onScanningStateChange, onScanAttempt }: QRCodeScannerPr
         return false;
       }
       
-      const isActive = await ensureSessionActive(sessionId);
-      
-      if (!isActive) {
-        console.error('Cannot mark attendance: Session is not active, trying direct update');
-        const { error: updateError } = await supabase
-          .from('attendance_sessions')
-          .update({ is_active: true, end_time: null })
-          .eq('id', sessionId);
-          
-        if (updateError) {
-          console.error('Direct update failed:', updateError);
-          return false;
-        }
-      }
+      await ensureSessionActive(sessionId);
       
       console.log('Session confirmed active, marking attendance for session:', sessionId, 'student:', user.id);
       
