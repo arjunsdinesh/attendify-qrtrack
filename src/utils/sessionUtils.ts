@@ -29,11 +29,34 @@ async function fetchSessionBasicData(sessionId: string): Promise<{
   data: { id: string; is_active: boolean } | null; 
   error: any 
 }> {
-  return supabase
-    .from('attendance_sessions')
-    .select('id, is_active')
-    .eq('id', sessionId)
-    .maybeSingle();
+  // Try with shorter timeout for faster feedback
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  
+  try {
+    const result = await supabase
+      .from('attendance_sessions')
+      .select('id, is_active')
+      .eq('id', sessionId)
+      .maybeSingle()
+      .abortSignal(controller.signal);
+      
+    clearTimeout(timeoutId);
+    return result;
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      console.log('Session query timed out, using direct query');
+      
+      // Try without timeout if aborted
+      return supabase
+        .from('attendance_sessions')
+        .select('id, is_active')
+        .eq('id', sessionId)
+        .maybeSingle();
+    }
+    throw e;
+  }
 }
 
 /**
@@ -43,11 +66,34 @@ async function fetchSessionExtendedData(sessionId: string): Promise<{
   data: SessionData | null;
   error: any
 }> {
-  return supabase
-    .from('attendance_sessions')
-    .select('id, is_active, class_id, classes(name)')
-    .eq('id', sessionId)
-    .maybeSingle();
+  // Try with shorter timeout for faster feedback
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  
+  try {
+    const result = await supabase
+      .from('attendance_sessions')
+      .select('id, is_active, class_id, classes(name)')
+      .eq('id', sessionId)
+      .maybeSingle()
+      .abortSignal(controller.signal);
+      
+    clearTimeout(timeoutId);
+    return result;
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      console.log('Extended session query timed out, trying without timeout');
+      
+      // Try without timeout if aborted
+      return supabase
+        .from('attendance_sessions')
+        .select('id, is_active, class_id, classes(name)')
+        .eq('id', sessionId)
+        .maybeSingle();
+    }
+    throw e;
+  }
 }
 
 /**
@@ -207,7 +253,7 @@ export const verifyAttendanceSession = async (
     
     console.log('Verifying attendance session:', sessionId);
     
-    // First check if the session exists - using the more robust count function first
+    // First check if the session exists using a reliable direct count query
     const { count, error: countError } = await supabase
       .from('attendance_sessions')
       .select('*', { count: 'exact', head: true })
@@ -215,19 +261,32 @@ export const verifyAttendanceSession = async (
       
     if (countError) {
       console.error('Count query error:', countError);
-      // Continue with the normal flow, don't return early
     } else if (count === 0) {
       console.error('Session not found in count query:', sessionId);
-      // But don't return yet, try the other queries as fallback
+      
+      // Attempt a direct query as last resort
+      const { data: directData } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .maybeSingle();
+        
+      if (!directData) {
+        return { 
+          exists: false, 
+          isActive: false,
+          error: 'Session not found in any query attempts' 
+        };
+      }
     } else {
-      console.log('Session exists according to count query');
+      console.log('Session exists according to count query, count:', count);
     }
     
     // Then check if the session exists with extended data
     let { data, error } = await fetchSessionExtendedData(sessionId);
     
-    if (error) {
-      console.error('Error verifying attendance session:', error);
+    if (error || !data) {
+      console.error('Error fetching extended session data:', error);
       
       // Try a simpler query as a fallback
       let { data: retryData, error: retryError } = await fetchSessionBasicData(sessionId);
@@ -239,37 +298,53 @@ export const verifyAttendanceSession = async (
         if (count && count > 0) {
           console.log('Using count result as fallback - session exists but details unavailable');
           
-          // Return basic existence but no details
-          return { 
-            exists: true, 
-            isActive: false,
-            data: {
-              is_active: false,
+          // Make one final direct attempt
+          const { data: lastAttemptData } = await supabase
+            .from('attendance_sessions')
+            .select('id, is_active')
+            .eq('id', sessionId)
+            .single();
+            
+          if (lastAttemptData) {
+            data = {
+              is_active: lastAttemptData.is_active,
               class_id: '',
               classes: { name: 'Unknown Class' },
-              id: sessionId
-            },
-            error: 'Session exists but details could not be retrieved'
+              id: lastAttemptData.id
+            };
+          } else {
+            // Return basic existence but no details
+            return { 
+              exists: true, 
+              isActive: false,
+              data: {
+                is_active: false,
+                class_id: '',
+                classes: { name: 'Unknown Class' },
+                id: sessionId
+              },
+              error: 'Session exists but details could not be retrieved'
+            };
+          }
+        } else {
+          return { 
+            exists: false, 
+            isActive: false,
+            error: 'Session not found'
           };
         }
+      } else {
+        // If we get here, we found the session on the second try
+        console.log('Session found on second attempt:', retryData);
         
-        return { 
-          exists: false, 
-          isActive: false,
-          error: 'Session not found'
+        // Create a properly shaped data object with default values
+        data = {
+          is_active: retryData.is_active,
+          class_id: '', 
+          classes: { name: 'Unknown Class' },
+          id: retryData.id
         };
       }
-      
-      // If we get here, we found the session on the second try
-      console.log('Session found on second attempt:', retryData);
-      
-      // Create a properly shaped data object with default values
-      data = {
-        is_active: retryData.is_active,
-        class_id: '', 
-        classes: { name: 'Unknown Class' },
-        id: retryData.id
-      };
     }
     
     if (!data) {
@@ -360,6 +435,33 @@ export const verifyAttendanceSession = async (
     };
   } catch (error: any) {
     console.error('Exception in verifyAttendanceSession:', error);
+    
+    // Make one final attempt to check if session exists
+    try {
+      const { data } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .maybeSingle();
+        
+      if (data) {
+        console.log('Final existence check succeeded even after error');
+        return { 
+          exists: true, 
+          isActive: false,
+          data: {
+            is_active: false,
+            class_id: '',
+            classes: { name: 'Unknown Class' },
+            id: sessionId
+          },
+          error: 'Session exists but encountered an error during verification'
+        };
+      }
+    } catch (e) {
+      console.error('Final existence check failed:', e);
+    }
+    
     return { 
       exists: false, 
       isActive: false,

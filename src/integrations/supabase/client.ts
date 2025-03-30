@@ -25,7 +25,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Optimized connection checking utility with faster timeout
+// Optimized connection checking utility with faster timeout and better retry handling
 export const checkConnection = async (): Promise<boolean> => {
   try {
     console.log('Starting quick connection check...');
@@ -33,11 +33,24 @@ export const checkConnection = async (): Promise<boolean> => {
     // Use a shorter timeout for faster response
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('Connection check timed out after 3 seconds');
+      console.log('Connection check timed out after 2 seconds');
       controller.abort();
-    }, 3000); // Reduced from 5 seconds to 3 seconds
+    }, 2000); // Reduced from 3 seconds to 2 seconds for faster feedback
     
-    // Use a simpler, faster query to check connection
+    // First try a simpler, faster query with minimal data to check connection
+    const { error: countError } = await supabase
+      .from('attendance_sessions')
+      .select('*', { count: 'exact', head: true })
+      .limit(1)
+      .abortSignal(controller.signal);
+    
+    if (!countError) {
+      clearTimeout(timeoutId);
+      console.log('Connection check successful via count query');
+      return true;
+    }
+    
+    // If count query fails, try a different approach as fallback
     const { error } = await supabase
       .from('profiles')
       .select('count', { count: 'exact', head: true })
@@ -51,11 +64,27 @@ export const checkConnection = async (): Promise<boolean> => {
       return false;
     }
     
-    console.log('Connection check successful');
+    console.log('Connection check successful via profiles');
     return true;
   } catch (error) {
     console.error('Connection check exception:', error);
-    return false;
+    
+    // Try one more approach as last resort with a very simple query
+    try {
+      const { error: lastResortError } = await supabase.rpc('force_activate_session', {
+        session_id: '00000000-0000-0000-0000-000000000000' // Invalid ID but helps test connectivity
+      });
+      
+      // Even if we get an error about invalid UUID, it means the connection worked
+      if (lastResortError && lastResortError.message.includes('invalid input syntax')) {
+        console.log('Last resort connection check successful (expected error but connection works)');
+        return true;
+      }
+      
+      return !lastResortError;
+    } catch (e) {
+      return false;
+    }
   }
 };
 
