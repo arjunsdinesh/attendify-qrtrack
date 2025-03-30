@@ -26,7 +26,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log("AuthProvider initialized, checking session...");
     let isMounted = true;
     
     const getSession = async () => {
@@ -34,10 +33,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session && isMounted) {
-          console.log("Session found, fetching user profile");
           await fetchUserProfile(session.user.id);
         } else if (isMounted) {
-          console.log("No session found");
           setLoading(false);
         }
       } catch (error) {
@@ -53,7 +50,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log("Auth state change event:", event);
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN' && session) {
@@ -76,7 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      console.log("Fetching profile for user:", userId);
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
         supabase.from('profiles').select('*').eq('id', userId as any).maybeSingle(),
         supabase.from('student_profiles').select('*').eq('id', userId as any).maybeSingle(),
@@ -85,7 +80,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (profileResponse.status === 'fulfilled' && profileResponse.value.data) {
         const profileData = profileResponse.value.data as any;
-        console.log("Profile data retrieved:", profileData);
         setUser(profileData as Profile);
         
         if (profileData.role === 'student' && 
@@ -108,20 +102,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      console.log("Attempting to sign in with email:", email);
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
       if (error) {
-        console.error("Sign in error detected:", error.message);
-        throw error;
+        if (error.message.includes('Email not confirmed') || error.message === 'Email not confirmed') {
+          console.log('Email not confirmed error:', error);
+          throw error;
+        } else {
+          throw error;
+        }
       }
 
       if (data.user) {
-        console.log("Authentication successful, fetching profile");
+        await fetchUserProfile(data.user.id);
         const { data: profileData } = await supabase
           .from('profiles')
           .select('role')

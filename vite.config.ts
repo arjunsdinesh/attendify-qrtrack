@@ -25,36 +25,17 @@ export default defineConfig(({ mode }) => ({
     target: 'esnext', 
     minify: 'esbuild',
     cssMinify: true,
-    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // Improved chunking strategy
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            if (id.includes('lucide') || id.includes('@radix')) {
-              return 'vendor-ui';
-            }
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase';
-            }
-            return 'vendor';
-          }
-          
-          // Group pages
-          if (id.includes('/src/pages/')) {
-            return 'pages';
-          }
-          
-          // Group components
-          if (id.includes('/src/components/')) {
-            if (id.includes('/ui/')) {
-              return 'ui-components';
-            }
-            return 'components';
-          }
+        manualChunks: {
+          'vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui': [
+            '@/components/ui/button',
+            '@/components/ui/card',
+            '@/components/ui/toast',
+            '@/components/ui/alert',
+          ],
+          'auth': ['@/context/AuthContext', '@/utils/supabase'],
         }
       }
     }

@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 
 /**
@@ -29,35 +30,11 @@ async function fetchSessionBasicData(sessionId: string): Promise<{
   data: { id: string; is_active: boolean } | null; 
   error: any 
 }> {
-  // Use Promise.race with a timeout promise instead of AbortController
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Query timeout')), 3000);
-  });
-  
-  try {
-    const result = await Promise.race([
-      supabase
-        .from('attendance_sessions')
-        .select('id, is_active')
-        .eq('id', sessionId)
-        .maybeSingle(),
-      timeoutPromise
-    ]) as any;
-      
-    return result;
-  } catch (e: any) {
-    if (e.message === 'Query timeout') {
-      console.log('Session query timed out, using direct query');
-      
-      // Try without timeout if aborted
-      return supabase
-        .from('attendance_sessions')
-        .select('id, is_active')
-        .eq('id', sessionId)
-        .maybeSingle();
-    }
-    throw e;
-  }
+  return supabase
+    .from('attendance_sessions')
+    .select('id, is_active')
+    .eq('id', sessionId)
+    .maybeSingle();
 }
 
 /**
@@ -67,35 +44,11 @@ async function fetchSessionExtendedData(sessionId: string): Promise<{
   data: SessionData | null;
   error: any
 }> {
-  // Use Promise.race with a timeout promise instead of AbortController
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Query timeout')), 3000);
-  });
-  
-  try {
-    const result = await Promise.race([
-      supabase
-        .from('attendance_sessions')
-        .select('id, is_active, class_id, classes(name)')
-        .eq('id', sessionId)
-        .maybeSingle(),
-      timeoutPromise
-    ]) as any;
-      
-    return result;
-  } catch (e: any) {
-    if (e.message === 'Query timeout') {
-      console.log('Extended session query timed out, trying without timeout');
-      
-      // Try without timeout if aborted
-      return supabase
-        .from('attendance_sessions')
-        .select('id, is_active, class_id, classes(name)')
-        .eq('id', sessionId)
-        .maybeSingle();
-    }
-    throw e;
-  }
+  return supabase
+    .from('attendance_sessions')
+    .select('id, is_active, class_id, classes(name)')
+    .eq('id', sessionId)
+    .maybeSingle();
 }
 
 /**
@@ -105,59 +58,19 @@ async function fetchSessionExtendedData(sessionId: string): Promise<{
 export async function activateSessionViaRPC(sessionId: string): Promise<boolean> {
   try {
     console.log('Activating session via RPC function:', sessionId);
-    // Try the RPC call first as it's the most reliable method
     const { data, error } = await supabase.rpc('force_activate_session', {
       session_id: sessionId
     });
     
     if (error) {
       console.error('RPC activation error:', error);
-      
-      // Fallback to direct update if RPC fails
-      const { data: updateData, error: updateError } = await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId)
-        .select('is_active')
-        .single();
-        
-      if (updateError || !updateData || !updateData.is_active) {
-        console.error('Direct update failed after RPC failure:', updateError);
-        return false;
-      }
-      
-      console.log('Direct update succeeded after RPC failure');
-      return true;
+      return false;
     }
     
     console.log('RPC activation result:', data);
     return !!data;
   } catch (error) {
     console.error('Exception in RPC activation:', error);
-    
-    // One more attempt with direct update as last resort
-    try {
-      const { data: lastAttemptData, error: lastAttemptError } = await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId)
-        .select('is_active')
-        .single();
-        
-      if (!lastAttemptError && lastAttemptData && lastAttemptData.is_active) {
-        console.log('Last resort activation succeeded');
-        return true;
-      }
-    } catch (e) {
-      console.error('Last resort activation failed:', e);
-    }
-    
     return false;
   }
 }
@@ -255,7 +168,7 @@ export const verifyAttendanceSession = async (
     
     console.log('Verifying attendance session:', sessionId);
     
-    // First check if the session exists using a reliable direct count query
+    // First check if the session exists - using the more robust count function first
     const { count, error: countError } = await supabase
       .from('attendance_sessions')
       .select('*', { count: 'exact', head: true })
@@ -263,32 +176,19 @@ export const verifyAttendanceSession = async (
       
     if (countError) {
       console.error('Count query error:', countError);
-    } else if (count === 0) {
+      // Continue with the normal flow, don't return early
+    } else if ((count || 0) === 0) {
       console.error('Session not found in count query:', sessionId);
-      
-      // Attempt a direct query as last resort
-      const { data: directData } = await supabase
-        .from('attendance_sessions')
-        .select('id')
-        .eq('id', sessionId)
-        .maybeSingle();
-        
-      if (!directData) {
-        return { 
-          exists: false, 
-          isActive: false,
-          error: 'Session not found in any query attempts' 
-        };
-      }
+      // But don't return yet, try the other queries as fallback
     } else {
-      console.log('Session exists according to count query, count:', count);
+      console.log('Session exists according to count query');
     }
     
     // Then check if the session exists with extended data
     let { data, error } = await fetchSessionExtendedData(sessionId);
     
-    if (error || !data) {
-      console.error('Error fetching extended session data:', error);
+    if (error) {
+      console.error('Error verifying attendance session:', error);
       
       // Try a simpler query as a fallback
       let { data: retryData, error: retryError } = await fetchSessionBasicData(sessionId);
@@ -297,63 +197,47 @@ export const verifyAttendanceSession = async (
         console.error('Session not found on second attempt:', sessionId);
         
         // If count query succeeded but detailed queries failed
-        if (count && count > 0) {
+        if ((count || 0) > 0) {
           console.log('Using count result as fallback - session exists but details unavailable');
           
-          // Make one final direct attempt
-          const { data: lastAttemptData } = await supabase
-            .from('attendance_sessions')
-            .select('id, is_active')
-            .eq('id', sessionId)
-            .single();
-            
-          if (lastAttemptData) {
-            data = {
-              is_active: lastAttemptData.is_active,
+          // Return basic existence but no details
+          return { 
+            exists: true, 
+            isActive: false,
+            data: {
+              is_active: false,
               class_id: '',
               classes: { name: 'Unknown Class' },
-              id: lastAttemptData.id
-            };
-          } else {
-            // Return basic existence but no details
-            return { 
-              exists: true, 
-              isActive: false,
-              data: {
-                is_active: false,
-                class_id: '',
-                classes: { name: 'Unknown Class' },
-                id: sessionId
-              },
-              error: 'Session exists but details could not be retrieved'
-            };
-          }
-        } else {
-          return { 
-            exists: false, 
-            isActive: false,
-            error: 'Session not found'
+              id: sessionId
+            },
+            error: 'Session exists but details could not be retrieved'
           };
         }
-      } else {
-        // If we get here, we found the session on the second try
-        console.log('Session found on second attempt:', retryData);
         
-        // Create a properly shaped data object with default values
-        data = {
-          is_active: retryData.is_active,
-          class_id: '', 
-          classes: { name: 'Unknown Class' },
-          id: retryData.id
+        return { 
+          exists: false, 
+          isActive: false,
+          error: 'Session not found'
         };
       }
+      
+      // If we get here, we found the session on the second try
+      console.log('Session found on second attempt:', retryData);
+      
+      // Create a properly shaped data object with default values
+      data = {
+        is_active: retryData.is_active,
+        class_id: '', 
+        classes: { name: 'Unknown Class' },
+        id: retryData.id
+      };
     }
     
     if (!data) {
       console.error('No data returned for session:', sessionId);
       
       // Last resort - if count showed it exists but we couldn't get data
-      if (count && count > 0) {
+      if ((count || 0) > 0) {
         return { 
           exists: true, 
           isActive: false,
@@ -392,24 +276,6 @@ export const verifyAttendanceSession = async (
       if (!activated) {
         console.error('Failed to activate session after multiple attempts');
         
-        // One final attempt with a direct update
-        const { error: finalError } = await supabase
-          .from('attendance_sessions')
-          .update({ 
-            is_active: true, 
-            end_time: null 
-          })
-          .eq('id', sessionId);
-          
-        if (!finalError) {
-          console.log('Final direct update sent, assuming success');
-          return { 
-            exists: true, 
-            isActive: true,
-            data: { ...data, is_active: true }
-          };
-        }
-        
         // Still return that the session exists even if activation failed
         return { 
           exists: true, 
@@ -437,40 +303,13 @@ export const verifyAttendanceSession = async (
     };
   } catch (error: any) {
     console.error('Exception in verifyAttendanceSession:', error);
-    
-    // Make one final attempt to check if session exists
-    try {
-      const { data } = await supabase
-        .from('attendance_sessions')
-        .select('id')
-        .eq('id', sessionId)
-        .maybeSingle();
-        
-      if (data) {
-        console.log('Final existence check succeeded even after error');
-        return { 
-          exists: true, 
-          isActive: false,
-          data: {
-            is_active: false,
-            class_id: '',
-            classes: { name: 'Unknown Class' },
-            id: sessionId
-          },
-          error: 'Session exists but encountered an error during verification'
-        };
-      }
-    } catch (e) {
-      console.error('Final existence check failed:', e);
-    }
-    
     return { 
       exists: false, 
       isActive: false,
       error: error.message || 'Unknown error'
     };
   }
-}
+};
 
 /**
  * Force activates an attendance session using the most reliable method
@@ -491,43 +330,12 @@ export const activateAttendanceSession = async (sessionId: string): Promise<bool
       success = await persistSessionActivation(sessionId);
     }
     
-    if (!success) {
-      // One final direct attempt
-      const { error } = await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId);
-        
-      if (!error) {
-        console.log('Final direct update succeeded');
-        return true;
-      }
-    }
-    
     return success;
   } catch (error) {
     console.error('Exception in activateAttendanceSession:', error);
-    
-    // Last resort attempt
-    try {
-      const { error } = await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId);
-        
-      return !error;
-    } catch (e) {
-      console.error('Last resort activation failed:', e);
-      return false;
-    }
+    return false;
   }
-}
+};
 
 /**
  * Direct function to forcefully update a session's status using the most reliable method
@@ -536,99 +344,31 @@ export const activateAttendanceSession = async (sessionId: string): Promise<bool
  */
 export const forceSessionActivation = async (sessionId: string): Promise<boolean> => {
   try {
-    if (!sessionId) return false;
-    
-    console.log('Force activating session with all methods:', sessionId);
-    
-    // Try multiple methods in parallel for better chance of success
-    const results = await Promise.allSettled([
-      // Method 1: RPC call (most reliable)
-      activateSessionViaRPC(sessionId),
-      
-      // Method 2: Direct update with timestamp reset
-      (async () => {
-        try {
-          const { data, error } = await supabase
-            .from('attendance_sessions')
-            .update({ 
-              is_active: true, 
-              end_time: null 
-            })
-            .eq('id', sessionId)
-            .select('is_active')
-            .single();
-            
-          if (error || !data) {
-            console.error('Method 2 failed:', error);
-            return false;
-          }
-          
-          return data.is_active === true;
-        } catch (error) {
-          console.error('Method 2 exception:', error);
-          return false;
-        }
-      })(),
-      
-      // Method 3: Another RPC attempt after a small delay
-      new Promise(resolve => setTimeout(async () => {
-        try {
-          const result = await activateSessionViaRPC(sessionId);
-          resolve(result);
-        } catch (error) {
-          resolve(false);
-        }
-      }, 100))
-    ]);
-    
-    // Check if any method succeeded
-    const anySuccess = results.some(result => 
-      result.status === 'fulfilled' && result.value === true
-    );
-    
-    console.log('Parallel activation attempts result:', anySuccess ? 'SUCCESS' : 'FAILED');
-    
-    if (!anySuccess) {
-      // One final attempt with direct SQL update as last resort
-      console.log('All parallel methods failed, trying final direct update');
-      
-      const { data, error } = await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId)
-        .select('is_active')
-        .single();
-        
-      if (error || !data || !data.is_active) {
-        console.error('Final attempt also failed:', error);
-        return false;
-      }
-      
-      console.log('Final direct update succeeded');
+    // Try RPC first (most reliable)
+    const rpcSuccess = await activateSessionViaRPC(sessionId);
+    if (rpcSuccess) {
       return true;
+    }
+    
+    console.log('RPC activation failed, trying standard update');
+    
+    // Fall back to standard update if RPC fails
+    const { data, error } = await supabase
+      .from('attendance_sessions')
+      .update({ is_active: true, end_time: null })
+      .eq('id', sessionId)
+      .select('is_active')
+      .single();
+      
+    if (error || !data || !data.is_active) {
+      console.error('Standard update failed:', error);
+      return false;
     }
     
     return true;
   } catch (error) {
     console.error('Error in forceSessionActivation:', error);
-    
-    // Last resort direct update without result checking
-    try {
-      await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId);
-        
-      return true;  // Assume it worked
-    } catch (e) {
-      return false;
-    }
+    return false;
   }
 };
 
@@ -649,90 +389,12 @@ export const checkSessionExists = async (sessionId: string): Promise<boolean> =>
       
     if (error) {
       console.error('Error checking if session exists:', error);
-      
-      // Fallback to a simple query if count fails
-      const { data, error: fallbackError } = await supabase
-        .from('attendance_sessions')
-        .select('id')
-        .eq('id', sessionId)
-        .maybeSingle();
-        
-      if (fallbackError) {
-        console.error('Fallback query failed:', fallbackError);
-        return false;
-      }
-      
-      return !!data;
+      return false;
     }
     
     return (count || 0) > 0;
   } catch (error) {
     console.error('Exception in checkSessionExists:', error);
     return false;
-  }
-}
-
-/**
- * Verifies if a session is active and ensures activation
- * This is a more robust check specifically focused on determining if a session is active
- * @param sessionId The ID of the attendance session to check
- * @returns Boolean indicating if session is active after verification
- */
-export const ensureSessionActive = async (sessionId: string): Promise<boolean> => {
-  try {
-    if (!sessionId) return false;
-    
-    console.log('Ensuring session is active:', sessionId);
-    
-    // Check if session exists first
-    const exists = await checkSessionExists(sessionId);
-    if (!exists) {
-      console.error('Session does not exist:', sessionId);
-      return false;
-    }
-    
-    // First try the RPC method (most reliable)
-    const rpcSuccess = await activateSessionViaRPC(sessionId);
-    if (rpcSuccess) {
-      console.log('RPC activation successful');
-      return true;
-    }
-    
-    // If RPC fails, perform direct update and verify
-    const { data, error } = await supabase
-      .from('attendance_sessions')
-      .update({ 
-        is_active: true, 
-        end_time: null 
-      })
-      .eq('id', sessionId)
-      .select('is_active')
-      .single();
-      
-    if (!error && data && data.is_active === true) {
-      console.log('Direct update verification successful');
-      return true;
-    }
-    
-    // Last option - force activation
-    return await forceSessionActivation(sessionId);
-    
-  } catch (error) {
-    console.error('Error in ensureSessionActive:', error);
-    
-    // Last resort direct update without verification
-    try {
-      await supabase
-        .from('attendance_sessions')
-        .update({ 
-          is_active: true, 
-          end_time: null 
-        })
-        .eq('id', sessionId);
-        
-      return true;  // Assume it worked
-    } catch (e) {
-      return false;
-    }
   }
 };
