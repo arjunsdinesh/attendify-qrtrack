@@ -14,7 +14,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import StudentDashboard from "./pages/StudentDashboard"; 
 
-// Lazily load non-critical components with error handling
+// Lazily load non-critical components with enhanced error handling
 const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard")
   .catch(err => {
     console.error("Failed to load TeacherDashboard:", err);
@@ -58,7 +58,7 @@ const ManageClasses = lazy(() => import("./pages/ManageClasses")
   })
 );
 
-// Configure with larger staleTime to reduce refetches
+// Configure with optimized staleTime and reduced refetches for better performance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -69,7 +69,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Loading fallback component
+// Loading fallback component with immediate visibility
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center">
     <LoadingSpinner className="h-8 w-8" />
@@ -120,60 +120,86 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 }
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <Toaster />
-          <Sonner />
-          <ErrorBoundary fallback={<ErrorFallback />}>
-            <Suspense fallback={<LoadingFallback />}>
+// App component with optimized loading
+const App = () => {
+  console.log("Rendering App component");
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <Toaster />
+            <Sonner />
+            <ErrorBoundary fallback={<ErrorFallback />}>
               <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Index />} />
-                <Route path="/student-dashboard" element={<StudentDashboard />} />
-                <Route path="/student" element={<StudentDashboard />} />
-                <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
-                <Route path="/teacher" element={<TeacherDashboard />} />
+                <Route path="/" element={
+                  <React.Suspense fallback={<LoadingFallback />}>
+                    <Index />
+                  </React.Suspense>
+                } />
+                <Route path="/login" element={
+                  <React.Suspense fallback={<LoadingFallback />}>
+                    <Index />
+                  </React.Suspense>
+                } />
+                <Route path="/student-dashboard" element={
+                  <React.Suspense fallback={<LoadingFallback />}>
+                    <StudentDashboard />
+                  </React.Suspense>
+                } />
+                <Route path="/student" element={
+                  <React.Suspense fallback={<LoadingFallback />}>
+                    <StudentDashboard />
+                  </React.Suspense>
+                } />
+                <Route path="/teacher-dashboard" element={
+                  <React.Suspense fallback={<LoadingFallback />}>
+                    <TeacherDashboard />
+                  </React.Suspense>
+                } />
+                <Route path="/teacher" element={
+                  <React.Suspense fallback={<LoadingFallback />}>
+                    <TeacherDashboard />
+                  </React.Suspense>
+                } />
                 <Route path="/scan-qr" element={
-                  <Suspense fallback={<LoadingFallback />}>
+                  <React.Suspense fallback={<LoadingFallback />}>
                     <ScanQR />
-                  </Suspense>
+                  </React.Suspense>
                 } />
                 <Route path="/create-session" element={
-                  <Suspense fallback={<LoadingFallback />}>
+                  <React.Suspense fallback={<LoadingFallback />}>
                     <CreateSession />
-                  </Suspense>
+                  </React.Suspense>
                 } />
                 <Route path="/profile" element={
-                  <Suspense fallback={<LoadingFallback />}>
+                  <React.Suspense fallback={<LoadingFallback />}>
                     <Profile />
-                  </Suspense>
+                  </React.Suspense>
                 } />
                 <Route path="/attendance-history" element={
-                  <Suspense fallback={<LoadingFallback />}>
+                  <React.Suspense fallback={<LoadingFallback />}>
                     <AttendanceHistory />
-                  </Suspense>
+                  </React.Suspense>
                 } />
                 <Route path="/attendance-records" element={
-                  <Suspense fallback={<LoadingFallback />}>
+                  <React.Suspense fallback={<LoadingFallback />}>
                     <AttendanceRecords />
-                  </Suspense>
+                  </React.Suspense>
                 } />
                 <Route path="/manage-classes" element={
-                  <Suspense fallback={<LoadingFallback />}>
+                  <React.Suspense fallback={<LoadingFallback />}>
                     <ManageClasses />
-                  </Suspense>
+                  </React.Suspense>
                 } />
                 <Route path="*" element={<NotFound />} />
               </Routes>
-            </Suspense>
-          </ErrorBoundary>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+            </ErrorBoundary>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
