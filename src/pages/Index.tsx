@@ -18,7 +18,7 @@ const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [dbConnected, setDbConnected] = useState<boolean | null>(null); // null means checking
-  const [localLoading, setLocalLoading] = useState(true);
+  const [localLoading, setLocalLoading] = useState(false); // Changed to false for faster initial render
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
   const [connectionCheckTimeout, setConnectionCheckTimeout] = useState(false);
 
@@ -33,7 +33,7 @@ const Index = () => {
         if (dbConnected === null) {
           setDbConnected(true); // Assume connected for better user experience
         }
-      }, 1200); // Reduced from 2 seconds to 1.2 seconds for faster UI feedback
+      }, 800); // Reduced from 1.2 seconds to 800ms for faster UI feedback
       
       const connected = await checkSupabaseConnection();
       
@@ -64,7 +64,7 @@ const Index = () => {
         if (isMounted && dbConnected === null) {
           setDbConnected(true);
         }
-      }, 800);
+      }, 400); // Reduced from 800ms to 400ms
       
       await checkConnection();
       if (!isMounted) return;
@@ -78,11 +78,11 @@ const Index = () => {
   }, []);
 
   useEffect(() => {
-    if (!loading && !localLoading && user) {
+    if (!loading && user) {
       const destination = user.role === 'student' ? '/student' : '/teacher';
       navigate(destination, { replace: true });
     }
-  }, [user, loading, localLoading, navigate]);
+  }, [user, loading, navigate]);
 
   const getEmailConfirmationFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -95,8 +95,8 @@ const Index = () => {
     }
   }, [emailConfirmationChecked]);
 
-  // Shorter loading period before showing UI
-  if (loading && !connectionCheckTimeout && !user && localLoading) {
+  // Shorter loading period before showing UI - removed the loading check for faster display
+  if (loading && !connectionCheckTimeout && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />

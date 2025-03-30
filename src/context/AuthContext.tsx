@@ -38,7 +38,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN' && session) {
-          setLoading(true);
           // Use setTimeout to avoid triggering during auth state change directly
           setTimeout(() => {
             fetchUserProfile(session.user.id);
@@ -51,6 +50,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     );
+
+    // Add a timeout to prevent hanging at loading screen
+    const loadingTimeout = setTimeout(() => {
+      if (isMounted && loading) {
+        console.log("Session check timeout reached, assuming no session");
+        setLoading(false);
+      }
+    }, 2000);
 
     // THEN check for existing session
     const getSession = async () => {
@@ -67,7 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.error('Error getting session:', error);
         if (isMounted) {
-          toast.error('Session error. Please try again later.');
           setLoading(false);
         }
       }
@@ -77,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isMounted = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, [navigate]);
@@ -84,11 +91,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (userId: string) => {
     try {
       console.log("Fetching profile for user:", userId);
+      
+      // Create a timeout to prevent hanging if fetching takes too long
+      const fetchTimeout = setTimeout(() => {
+        setLoading(false);
+        console.log("Profile fetch timeout reached");
+      }, 3000);
+      
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('student_profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('teacher_profiles').select('*').eq('id', userId).maybeSingle()
       ]);
+      
+      clearTimeout(fetchTimeout);
       
       if (profileResponse.status === 'fulfilled' && profileResponse.value.data) {
         const profileData = profileResponse.value.data as any;
