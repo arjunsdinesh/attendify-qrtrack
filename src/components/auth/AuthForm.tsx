@@ -16,7 +16,7 @@ const AuthForm = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check Supabase connection on component mount - with optimized timing
+  // Check Supabase connection on component mount
   useEffect(() => {
     console.log("AuthForm mounted, checking connection...");
     
@@ -31,7 +31,7 @@ const AuthForm = () => {
             setConnectionStatus('connected');
             setIsLoading(false);
           }
-        }, 800); // Show as connected if check takes too long
+        }, 800);
         
         console.log("Starting actual connection check");
         const isConnected = await checkSupabaseConnection();
@@ -42,7 +42,7 @@ const AuthForm = () => {
           setConnectionStatus(isConnected ? 'connected' : 'disconnected');
           setIsLoading(false);
           
-          if (!isConnected) {
+          if (!isConnected && isMounted) {
             toast.error("Database connection issue. Please check your network connection.");
           }
         }
