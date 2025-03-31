@@ -15,19 +15,22 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   
   // Don't show any status initially to prevent loading screens
   useEffect(() => {
-    // Don't show checking status at all to prevent loading screens
+    // Never show checking status
     if (status === 'checking') {
       setShowStatus(false);
-    } else if (status === 'disconnected') {
-      // Only show disconnected after a slight delay
-      const timeoutId = setTimeout(() => {
+      return;
+    } 
+    
+    // Only show disconnected after significant failures
+    if (status === 'disconnected') {
+      // Only show disconnected after a slight delay and multiple retries
+      if (retryCount > 2) {
         setShowStatus(true);
-      }, 1000);
-      return () => clearTimeout(timeoutId);
+      }
     } else {
       setShowStatus(false); // Hide when connected
     }
-  }, [status]);
+  }, [status, retryCount]);
   
   // Reset retry status when connection status changes
   useEffect(() => {
@@ -44,7 +47,7 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
     }
   };
 
-  // Return null for checking to prevent loading screens
+  // Return null for checking status - never show loading
   if (status === 'checking' || !showStatus) {
     return null;
   }
