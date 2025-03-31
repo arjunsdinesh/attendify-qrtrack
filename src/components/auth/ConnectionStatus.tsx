@@ -13,7 +13,7 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   const [retryCount, setRetryCount] = useState(0);
   const [showStatus, setShowStatus] = useState(false);
   
-  // Don't show any status initially to prevent loading screens
+  // Always assume connected initially to prevent loading screens
   useEffect(() => {
     // Never show checking status
     if (status === 'checking') {
@@ -21,11 +21,14 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
       return;
     } 
     
-    // Only show disconnected after significant failures
+    // Only show disconnected after multiple retries and a significant delay
     if (status === 'disconnected') {
-      // Only show disconnected after a slight delay and multiple retries
-      if (retryCount > 2) {
-        setShowStatus(true);
+      // Only show after multiple retries to prevent flickering
+      if (retryCount > 3) {
+        const timer = setTimeout(() => {
+          setShowStatus(true);
+        }, 2000);
+        return () => clearTimeout(timer);
       }
     } else {
       setShowStatus(false); // Hide when connected
@@ -47,7 +50,7 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
     }
   };
 
-  // Return null for checking status - never show loading
+  // Always assume connected for better UX
   if (status === 'checking' || !showStatus) {
     return null;
   }

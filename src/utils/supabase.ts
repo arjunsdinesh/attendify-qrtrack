@@ -29,33 +29,10 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Super fast connection check that doesn't block rendering
+// Connection check that immediately returns true to ensure UI rendering
 export const checkSupabaseConnection = async (): Promise<boolean> => {
-  // IMPORTANT: Always assume connection is available initially
-  // This prevents UI blocking while checking connection
-  try {
-    // Set a very short timeout to prevent blocking UI
-    const timeoutPromise = new Promise<boolean>((resolve) => {
-      setTimeout(() => resolve(true), 1500);
-    });
-    
-    // Race between the actual check and the timeout
-    return await Promise.race([
-      timeoutPromise,
-      // Optional real check that won't block rendering
-      new Promise<boolean>(async (resolve) => {
-        try {
-          const { data, error } = await supabase.from('profiles').select('count').limit(1);
-          resolve(!error);
-        } catch (e) {
-          resolve(true); // Still assume success on error for better UX
-        }
-      })
-    ]);
-  } catch (error) {
-    // Always default to true on any error to prevent loading screens
-    return true;
-  }
+  // Skip connection check and always assume connected
+  return true;
 };
 
 // Create the force_activate_session RPC if it doesn't exist - delayed execution
@@ -78,7 +55,7 @@ const createForceActivateRPC = async () => {
 // Export the supabase client for backwards compatibility
 export { supabase };
 
-// Use a very short timeout to initialize non-critical operations
+// Use a longer timeout to initialize non-critical operations
 setTimeout(() => {
   createForceActivateRPC();
-}, 2000);
+}, 5000);
