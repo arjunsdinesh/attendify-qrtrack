@@ -1,67 +1,101 @@
-
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui-components';
+import { checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Mail } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ConnectionStatus from '@/components/auth/ConnectionStatus';
 import { Button } from '@/components/ui/button';
 
-// Use dynamic import with error handling
-const AuthForm = lazy(() => 
-  import('@/components/auth/AuthForm')
-    .catch(err => {
-      console.error('Failed to load AuthForm:', err);
-      return { 
-        default: () => <div>Login form failed to load. Please refresh the page.</div> 
-      };
-    })
-);
+const AuthForm = lazy(() => {
+  const preloadPromise = import('@/components/auth/AuthForm');
+  return preloadPromise;
+});
 
 const Index = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [dbConnected, setDbConnected] = useState<boolean | null>(true);
+  const [localLoading, setLocalLoading] = useState(false);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
-  
-  // Added a timeout to force UI update after a short delay
-  useEffect(() => {
-    const timer = setTimeout(() => {
+  const [connectionCheckTimeout, setConnectionCheckTimeout] = useState(false);
+
+  const checkConnection = async () => {
+    try {
+      const timeoutId = setTimeout(() => {
+        setDbConnected(null);
+      }, 500);
+      
+      const connectionTimeoutPromise = new Promise<boolean>(resolve => {
+        setTimeout(() => {
+          setConnectionCheckTimeout(true);
+          resolve(true);
+        }, 3000);
+      });
+      
+      const connected = await Promise.race([
+        checkSupabaseConnection(),
+        connectionTimeoutPromise
+      ]);
+      
+      clearTimeout(timeoutId);
+      
+      setDbConnected(connected);
+      if (!connected) {
+        console.error('Database connection failed');
+      }
+    } catch (error) {
+      setDbConnected(true);
+    } finally {
+      setLocalLoading(false);
       setEmailConfirmationChecked(true);
-    }, 500);
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  // Check for email confirmation in URL
-  useEffect(() => {
-    const hasEmailConfirmation = getEmailConfirmationFromUrl();
-    
-    if (hasEmailConfirmation) {
-      toast.success('Email confirmed successfully! You can now log in.');
     }
+  };
+  
+  useEffect(() => {
+    setDbConnected(true);
+    
+    setTimeout(() => {
+      checkConnection();
+    }, 100);
+    
+    const backupTimeoutId = setTimeout(() => {
+      if (dbConnected === null) {
+        setDbConnected(true);
+      }
+    }, 5000);
+    
+    return () => clearTimeout(backupTimeoutId);
   }, []);
 
-  // Redirect authenticated users
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!loading && user) {
       const destination = user.role === 'student' ? '/student' : '/teacher';
-      navigate(destination, { replace: true });
+      setTimeout(() => {
+        navigate(destination, { replace: true });
+      }, 0);
     }
-  }, [user, authLoading, navigate]);
+  }, [user, loading, navigate]);
 
   const getEmailConfirmationFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('email_confirmed') === 'true';
   };
 
-  // Always render immediately to prevent blank screens
-  // Only show loading spinner if explicitly loading auth AND we have no user yet
-  const isActuallyLoading = authLoading && !user;
+  useEffect(() => {
+    if (emailConfirmationChecked && getEmailConfirmationFromUrl()) {
+      toast.success('Email confirmed successfully! You can now log in.');
+    }
+  }, [emailConfirmationChecked]);
 
   if (!user) {
+    const connectionStatus = dbConnected === null ? 'checking' : 
+                            dbConnected ? 'connected' : 'disconnected';
+    
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
@@ -76,10 +110,19 @@ const Index = () => {
           )}
           
           <Card className="border-2 shadow-lg">
+            <ConnectionStatus 
+              status={connectionStatus} 
+              onRetry={checkConnection} 
+            />
             <CardContent className="pt-6">
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold mb-2">Attendify</h1>
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
+                {connectionCheckTimeout && dbConnected === null && (
+                  <p className="text-amber-600 mt-2">
+                    Connection check is taking longer than expected. You can still attempt to use the app.
+                  </p>
+                )}
               </div>
               
               <Suspense fallback={<LoadingSpinner className="h-6 w-6 mx-auto" />}>
@@ -92,7 +135,6 @@ const Index = () => {
     );
   }
 
-  // If we have a user, render the appropriate dashboard
   return (
     <DashboardLayout>
       {user.role === 'teacher' ? (

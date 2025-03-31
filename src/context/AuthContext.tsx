@@ -27,24 +27,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    const loadingTimeout = setTimeout(() => {
+    const initialLoadingTimeout = setTimeout(() => {
       setLoading(false);
-    }, 1500);
-    
+    }, 500);
+
     let isMounted = true;
-    let profileInitialized = false;
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN' && session) {
-          if (!profileInitialized) {
-            profileInitialized = true;
-            setTimeout(() => {
-              fetchUserProfile(session.user.id);
-            }, 0);
-          }
+          setTimeout(() => {
+            fetchUserProfile(session.user.id);
+          }, 0);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setStudentProfile(null);
@@ -54,27 +50,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    setTimeout(async () => {
+    const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session && isMounted) {
-          if (!profileInitialized) {
-            profileInitialized = true;
-            fetchUserProfile(session.user.id);
-          }
+          await fetchUserProfile(session.user.id);
         } else if (isMounted) {
           setLoading(false);
+          clearTimeout(initialLoadingTimeout);
         }
       } catch (error) {
-        console.error("Session error:", error);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          clearTimeout(initialLoadingTimeout);
+        }
       }
-    }, 0);
+    };
+
+    getSession();
 
     return () => {
       isMounted = false;
-      clearTimeout(loadingTimeout);
+      clearTimeout(initialLoadingTimeout);
       subscription.unsubscribe();
     };
   }, [navigate]);
@@ -83,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const fetchTimeout = setTimeout(() => {
         setLoading(false);
-      }, 1000);
+      }, 700);
       
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
@@ -108,7 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
     } finally {
       setLoading(false);
     }
