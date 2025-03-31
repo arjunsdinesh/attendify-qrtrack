@@ -9,7 +9,7 @@
     <meta name="author" content="Lovable" />
     <meta property="og:image" content="/og-image.png" />
     <!-- Preconnect to critical origins -->
-    <link rel="preconnect" href="https://ushmvfuczmqjjtwnqebp.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://wmhmdacynswuyhzfbptu.supabase.co" crossorigin />
   </head>
 
   <body>
@@ -24,6 +24,12 @@
       @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
+      }
+      /* Force immediate display while React loads */
+      #root {
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
       }
     </style>
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->

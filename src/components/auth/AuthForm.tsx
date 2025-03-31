@@ -15,61 +15,36 @@ const AuthForm = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check Supabase connection on component mount with optimistic rendering
+  // Simplified connection check with priority on rendering
   useEffect(() => {
     console.log("AuthForm mounted, checking connection...");
     
-    // Always assume we're connected initially to prevent blocking the UI
+    // Always render as connected first
     setConnectionStatus('connected');
     setIsLoading(false);
     
-    // Check in the background with timeout to prevent blocking
-    const checkConnection = async () => {
-      try {
-        // Use Promise.race with a timeout to prevent blocking
-        const connectionPromise = checkSupabaseConnection();
-        const timeoutPromise = new Promise<boolean>(resolve => {
-          setTimeout(() => {
-            console.log("Connection check taking too long, assuming connected");
-            resolve(true);
-          }, 5000);
-        });
-        
-        const isConnected = await Promise.race([connectionPromise, timeoutPromise]);
-        console.log("Connection check result:", isConnected ? "connected" : "disconnected");
-        
-        if (!isConnected) {
+    // Non-blocking background check
+    setTimeout(() => {
+      checkSupabaseConnection().then(isConnected => {
+        if (!isConnected && retryCount > 2) {
           setConnectionStatus('disconnected');
-          // Only show toast if user explicitly retried
-          if (retryCount > 0) {
-            toast.error("Database connection issue. Please check your network connection.");
-          }
         }
-      } catch (error) {
-        console.error('Connection check failed:', error);
-        // Still keep the UI usable
-        setConnectionStatus('connected');
-      }
-    };
-    
-    // Delay the check slightly to prioritize UI rendering
-    const timerId = setTimeout(() => {
-      checkConnection();
-    }, 200);
-    
-    return () => clearTimeout(timerId);
+      }).catch(() => {
+        // Keep UI working even on connection error
+      });
+    }, 1000);
   }, [retryCount]);
 
   // Retry connection when disconnected
   const handleRetryConnection = async () => {
     console.log("Retrying connection...");
-    setConnectionStatus('checking');
+    setConnectionStatus('connected'); // Optimistic update
     setRetryCount(prev => prev + 1);
   };
 
-  console.log("Rendering AuthForm with connectionStatus:", connectionStatus, "isLoading:", isLoading);
+  console.log("Rendering AuthForm with connectionStatus:", connectionStatus);
 
-  // Always render the form to prevent loading screens, regardless of connection status
+  // Always render the form regardless of connection status
   return (
     <div className="max-w-md w-full mx-auto">
       <Card className="bg-white/95 backdrop-blur-sm border border-border/50 shadow-soft">
@@ -88,7 +63,6 @@ const AuthForm = () => {
             <TabsTrigger value="register">Register</TabsTrigger>
           </TabsList>
           
-          {/* Login Form */}
           <TabsContent value="login" className="w-full">
             <CardHeader>
               <CardTitle className="text-2xl">Welcome back</CardTitle>
@@ -101,7 +75,6 @@ const AuthForm = () => {
             </CardContent>
           </TabsContent>
           
-          {/* Register Form */}
           <TabsContent value="register" className="w-full">
             <CardHeader>
               <CardTitle className="text-2xl">Create an account</CardTitle>
