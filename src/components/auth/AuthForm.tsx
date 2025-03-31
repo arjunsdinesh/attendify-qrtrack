@@ -16,24 +16,24 @@ const AuthForm = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Generate a unique form instance ID on component mount
+  // Generate a unique form instance ID
   const [formInstanceId] = useState(() => `form_${Math.random().toString(36).substring(2, 9)}`);
 
-  // Simplified connection check with priority on rendering
+  // Always assume connection is successful initially
   useEffect(() => {
-    console.log(`AuthForm mounted (instance: ${formInstanceId}), checking connection...`);
+    console.log(`AuthForm mounted (instance: ${formInstanceId})`);
     
-    // Always render as connected first
+    // Always start as connected for better UX
     setConnectionStatus('connected');
     setIsLoading(false);
     
-    // Clear any stale session data that might be causing conflicts
+    // Clean up potentially problematic session data
     const clearStaleSessionData = () => {
       try {
-        // Only clear specific keys that might be causing problems
+        // Be very selective about what we clear
         const keysToPreserve = ['supabase.auth.token'];
         
-        // Identify any old or stale login sessions in localStorage
+        // Only clean up obviously stale data
         Object.keys(localStorage).forEach(key => {
           if (!keysToPreserve.includes(key) && (key.includes('supabase.auth.') && key !== 'supabase.auth.token')) {
             console.log(`Cleaning up potentially stale auth data: ${key}`);
@@ -41,16 +41,15 @@ const AuthForm = () => {
           }
         });
       } catch (e) {
-        // Ignore errors from localStorage operations
         console.log('Error cleaning session data, continuing anyway');
       }
     };
     
-    // Attempt to clear any problematic data in a non-blocking way
+    // Run cleanup in non-blocking way
     setTimeout(clearStaleSessionData, 300);
   }, [retryCount, formInstanceId]);
 
-  // Retry connection when disconnected
+  // Retry handler that always assumes success
   const handleRetryConnection = async () => {
     console.log(`Retrying connection (instance: ${formInstanceId})...`);
     setConnectionStatus('connected'); // Optimistic update
@@ -59,7 +58,7 @@ const AuthForm = () => {
 
   console.log(`Rendering AuthForm (instance: ${formInstanceId}) with connectionStatus:`, connectionStatus);
 
-  // Always render the form regardless of connection status
+  // Always render form immediately
   return (
     <div className="max-w-md w-full mx-auto">
       <Card className="bg-white/95 backdrop-blur-sm border border-border/50 shadow-soft">

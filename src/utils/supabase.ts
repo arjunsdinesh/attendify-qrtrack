@@ -29,27 +29,23 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Enhanced connection check that always returns true quickly to ensure UI renders
+// Simplified connection check that always returns success quickly
 export const checkSupabaseConnection = async (): Promise<boolean> => {
-  // Generate unique request ID for logging
-  const requestId = `check_${Math.random().toString(36).substring(2, 9)}`;
-  console.log(`Starting connection check (${requestId})`);
-  
-  // Skip heavy connection checks and always assume connected
+  // Always return true immediately to prevent loading blockage
   return true;
 };
 
-// Create the force_activate_session RPC if it doesn't exist - delayed execution
+// Create the force_activate_session RPC in a non-blocking way
 const createForceActivateRPC = async () => {
-  // Execution deferred to not block UI rendering
+  // Execute in background after a delay to not block rendering
   setTimeout(async () => {
     try {
-      // Minimal check without blocking rendering
-      const { error } = await supabase.rpc('force_activate_session', { 
+      // Non-blocking check
+      await supabase.rpc('force_activate_session', { 
         session_id: '00000000-0000-0000-0000-000000000000' 
       });
     } catch (error) {
-      // Silent error handling to prevent UI blocking
+      // Silent handling - don't block the UI
     }
   }, 5000);
 };
@@ -57,7 +53,7 @@ const createForceActivateRPC = async () => {
 // Export the supabase client for backwards compatibility
 export { supabase };
 
-// Use a longer timeout to initialize non-critical operations
+// Delay initialization of non-critical operations
 setTimeout(() => {
   createForceActivateRPC();
 }, 5000);

@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Use an IIFE for immediate execution with improved multi-device session handling
+// Use an IIFE for immediate execution with robust multi-device support
 (function renderApp() {
   // Create a unique session identifier for this browser tab
   const sessionId = crypto.randomUUID();
@@ -19,56 +19,45 @@ import './index.css';
     return;
   }
   
-  // More selective cleanup that preserves current session data and prevents multi-device conflicts
+  // Handle local storage to prevent cross-device conflicts while preserving authentication
   try {
-    // Only clear specific problematic keys that might cause conflicts across devices
-    // But DO NOT clear the current auth token to preserve login state
+    // Preserve the current authentication token
     const currentAuthToken = localStorage.getItem('supabase.auth.token');
     
+    // Only clean potentially conflicting refresh tokens from other sessions
     Object.keys(localStorage).forEach(key => {
-      // Only clean up stale or invalid tokens while preserving the current one
       if (key.includes('supabase.auth.token') && 
           key.includes('refresh') && 
-          !key.includes(sessionId)) {
-        console.log(`Removing potential conflicting token: ${key}`);
+          !key.includes(sessionId) &&
+          key !== 'supabase.auth.token') {
+        console.log(`Cleaning up potential conflicting token: ${key}`);
         localStorage.removeItem(key);
       }
     });
     
-    // If we cleared the current token accidentally, restore it
+    // Make sure we didn't accidentally remove the current token
     if (currentAuthToken) {
       localStorage.setItem('supabase.auth.token', currentAuthToken);
     }
   } catch (e) {
-    // Silent error handling
+    console.log("Error handling local storage, continuing anyway:", e);
   }
   
-  // Create root and render without any delays or checks
-  try {
-    const root = createRoot(rootElement);
-    root.render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    );
-    
-    console.log(`React application initialized with session ID: ${sessionId}`);
-    
-    // Store the current tab's session ID in sessionStorage (not localStorage)
-    // Using sessionStorage ensures each browser tab has its own isolated storage
-    sessionStorage.setItem('app_session_id', sessionId);
-  } catch (error) {
-    console.error("Failed to initialize React:", error);
-    // Show error but keep original HTML spinner visible
-    const errorDiv = document.createElement('div');
-    errorDiv.style.color = 'red';
-    errorDiv.style.padding = '20px';
-    errorDiv.textContent = 'Error loading application. Please refresh the page.';
-    document.body.appendChild(errorDiv);
-  }
+  // Create root and render app immediately without waiting for any async operations
+  const root = createRoot(rootElement);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+  
+  console.log(`React application initialized with session ID: ${sessionId}`);
+  
+  // Store the current tab's session ID in sessionStorage (not localStorage)
+  sessionStorage.setItem('app_session_id', sessionId);
 })();
 
-// Global error handler that doesn't interfere with rendering
+// Global error handler
 window.addEventListener('error', (event) => {
   console.error('Global error caught:', event.error);
 });

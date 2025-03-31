@@ -55,13 +55,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session && isMounted) {
-          await fetchUserProfile(session.user.id);
+          setTimeout(() => {
+            fetchUserProfile(session.user.id);
+          }, 0);
         } else if (isMounted) {
           setLoading(false);
           clearTimeout(initialLoadingTimeout);
         }
       } catch (error) {
         if (isMounted) {
+          console.error("Session error:", error);
           setLoading(false);
           clearTimeout(initialLoadingTimeout);
         }
@@ -106,6 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (error) {
+      console.error("Error fetching profile:", error);
     } finally {
       setLoading(false);
     }
