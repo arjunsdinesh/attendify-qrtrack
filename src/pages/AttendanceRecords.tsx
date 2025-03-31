@@ -334,6 +334,7 @@ const AttendanceRecords = () => {
                       <TableRow>
                         <TableHead>Student Name</TableHead>
                         <TableHead>Register Number</TableHead>
+                        <TableHead>Roll Number</TableHead>
                         <TableHead>Time</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -345,6 +346,9 @@ const AttendanceRecords = () => {
                           </TableCell>
                           <TableCell>
                             {record.student?.student_profiles?.[0]?.register_number || '-'}
+                          </TableCell>
+                          <TableCell>
+                            {record.student?.student_profiles?.[0]?.roll_number || '-'}
                           </TableCell>
                           <TableCell>
                             {format(parseISO(record.timestamp), 'h:mm a')}
