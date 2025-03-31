@@ -35,7 +35,7 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
   const requestId = `check_${Math.random().toString(36).substring(2, 9)}`;
   console.log(`Starting connection check (${requestId})`);
   
-  // Check if another tab is already authenticated
+  // Check if another tab is already authenticated with minimal overhead
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData?.session) {

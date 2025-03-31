@@ -1,9 +1,10 @@
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Use an IIFE for immediate execution with improved session handling
+// Use an IIFE for immediate execution with improved multi-device session handling
 (function renderApp() {
   // Create a unique session identifier for this browser tab
   const sessionId = crypto.randomUUID();
@@ -16,6 +17,19 @@ import './index.css';
     console.error("Failed to find the root element");
     document.body.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize application. The root element was not found.</div>';
     return;
+  }
+  
+  // Force clean any potentially conflicting session data
+  try {
+    // Only clear specific problematic keys that might cause conflicts across devices
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('supabase.auth.token.refresh')) {
+        console.log(`Removing potential conflicting token: ${key}`);
+        localStorage.removeItem(key);
+      }
+    });
+  } catch (e) {
+    // Silent error handling
   }
   
   // Create root and render without any delays or checks
