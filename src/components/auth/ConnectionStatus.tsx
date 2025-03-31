@@ -13,22 +13,16 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   const [retryCount, setRetryCount] = useState(0);
   const [showStatus, setShowStatus] = useState(false);
   
-  // Don't show status immediately to prevent UI flashing
+  // Don't show any status initially to prevent loading screens
   useEffect(() => {
-    // For checking status, show immediately but with short duration
+    // Don't show checking status at all to prevent loading screens
     if (status === 'checking') {
-      setShowStatus(true);
-      // Auto-hide checking status after a short period to prevent blocking
-      const timeoutId = setTimeout(() => {
-        if (status === 'checking') {
-          setShowStatus(false);
-        }
-      }, 3000);
-      return () => clearTimeout(timeoutId);
+      setShowStatus(false);
     } else if (status === 'disconnected') {
+      // Only show disconnected after a slight delay
       const timeoutId = setTimeout(() => {
         setShowStatus(true);
-      }, 500);
+      }, 1000);
       return () => clearTimeout(timeoutId);
     } else {
       setShowStatus(false); // Hide when connected
@@ -50,22 +44,11 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
     }
   };
 
-  // Return null for connected to prevent UI flashing
-  if (status === 'connected' || (status !== 'disconnected' && !showStatus)) {
+  // Return null for checking to prevent loading screens
+  if (status === 'checking' || !showStatus) {
     return null;
   }
   
-  if (status === 'checking' && showStatus) {
-    return (
-      <div className="bg-amber-50 p-2 rounded-t-lg border-b border-amber-200">
-        <div className="flex items-center text-amber-700 text-sm">
-          <span className="animate-pulse mr-2 transition-all">●</span>
-          <span>Connecting to database...</span>
-        </div>
-      </div>
-    );
-  }
-
   if (status === 'disconnected' && showStatus) {
     return (
       <div className="bg-red-50 p-2 rounded-t-lg border-b border-red-200">

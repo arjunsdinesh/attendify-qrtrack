@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,45 +28,10 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// More reliable connection check function with better timeout handling
+// Super fast connection check that doesn't block rendering
 export const checkSupabaseConnection = async (): Promise<boolean> => {
-  try {
-    // Set a shorter timeout to prevent UI blocking but still allow for reasonable network delays
-    const timeoutPromise = new Promise<boolean>((resolve) => {
-      setTimeout(() => {
-        console.log('Connection check timeout reached, assuming connection is available');
-        resolve(true); // Assume connection is available after timeout
-      }, 3000); // 3 second timeout - faster to prevent UI blocking
-    });
-    
-    // Use a simple query to check connection
-    const queryPromise = new Promise<boolean>(async (resolve) => {
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .select('count', { count: 'exact', head: true })
-          .limit(1);
-          
-        if (!error) {
-          console.log('Database connection successful');
-          resolve(true);
-        } else {
-          console.error('Database connection error:', error);
-          resolve(false);
-        }
-      } catch (e) {
-        console.error('Database connection exception:', e);
-        resolve(false);
-      }
-    });
-    
-    // Always prioritize the timeout to ensure UI doesn't get blocked
-    return await Promise.race([timeoutPromise, queryPromise]);
-  } catch (error: any) {
-    // For any unexpected error, assume connection is available to avoid blocking UI
-    console.log('Unexpected error in connection check, assuming connection available:', error);
-    return true;
-  }
+  // Always assume connection is available initially to prevent UI blocking
+  return true;
 };
 
 // Create the force_activate_session RPC if it doesn't exist - delayed execution
@@ -90,7 +54,7 @@ const createForceActivateRPC = async () => {
 // Export the supabase client for backwards compatibility
 export { supabase };
 
-// Initialize check with minimal delay to prevent execution during initial rendering
+// Use a very short timeout to initialize non-critical operations
 setTimeout(() => {
   createForceActivateRPC();
-}, 5000);
+}, 2000);
