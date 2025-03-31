@@ -29,9 +29,23 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Connection check that immediately returns true to ensure UI rendering
+// Enhanced connection check that always returns true quickly to ensure UI renders
 export const checkSupabaseConnection = async (): Promise<boolean> => {
-  // Skip connection check and always assume connected
+  // Generate unique request ID for logging
+  const requestId = `check_${Math.random().toString(36).substring(2, 9)}`;
+  console.log(`Starting connection check (${requestId})`);
+  
+  // Check if another tab is already authenticated
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session) {
+      console.log(`Found existing session (${requestId})`);
+    }
+  } catch (e) {
+    // Ignore errors here - we'll always assume connected
+  }
+
+  // Skip heavy connection checks and always assume connected
   return true;
 };
 

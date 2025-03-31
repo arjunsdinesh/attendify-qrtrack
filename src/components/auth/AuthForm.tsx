@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,14 +15,39 @@ const AuthForm = () => {
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('connected');
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Generate a unique form instance ID on component mount
+  const [formInstanceId] = useState(() => `form_${Math.random().toString(36).substring(2, 9)}`);
 
   // Simplified connection check with priority on rendering
   useEffect(() => {
-    console.log("AuthForm mounted, checking connection...");
+    console.log(`AuthForm mounted (instance: ${formInstanceId}), checking connection...`);
     
     // Always render as connected first
     setConnectionStatus('connected');
     setIsLoading(false);
+    
+    // Clear any stale session data that might be causing conflicts
+    const clearStaleSessionData = () => {
+      try {
+        // Only clear specific keys that might be causing problems
+        const keysToPreserve = ['supabase.auth.token'];
+        
+        // Identify any old or stale login sessions in localStorage
+        Object.keys(localStorage).forEach(key => {
+          if (!keysToPreserve.includes(key) && (key.includes('supabase.auth.') && key !== 'supabase.auth.token')) {
+            console.log(`Cleaning up potentially stale auth data: ${key}`);
+            localStorage.removeItem(key);
+          }
+        });
+      } catch (e) {
+        // Ignore errors from localStorage operations
+        console.log('Error cleaning session data, continuing anyway');
+      }
+    };
+    
+    // Attempt to clear any problematic data in a non-blocking way
+    setTimeout(clearStaleSessionData, 300);
     
     // Non-blocking background check
     setTimeout(() => {
@@ -33,16 +59,16 @@ const AuthForm = () => {
         // Keep UI working even on connection error
       });
     }, 1000);
-  }, [retryCount]);
+  }, [retryCount, formInstanceId]);
 
   // Retry connection when disconnected
   const handleRetryConnection = async () => {
-    console.log("Retrying connection...");
+    console.log(`Retrying connection (instance: ${formInstanceId})...`);
     setConnectionStatus('connected'); // Optimistic update
     setRetryCount(prev => prev + 1);
   };
 
-  console.log("Rendering AuthForm with connectionStatus:", connectionStatus);
+  console.log(`Rendering AuthForm (instance: ${formInstanceId}) with connectionStatus:`, connectionStatus);
 
   // Always render the form regardless of connection status
   return (
