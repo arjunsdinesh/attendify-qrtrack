@@ -19,15 +19,26 @@ import './index.css';
     return;
   }
   
-  // Force clean any potentially conflicting session data
+  // More selective cleanup that preserves current session data and prevents multi-device conflicts
   try {
     // Only clear specific problematic keys that might cause conflicts across devices
+    // But DO NOT clear the current auth token to preserve login state
+    const currentAuthToken = localStorage.getItem('supabase.auth.token');
+    
     Object.keys(localStorage).forEach(key => {
-      if (key.includes('supabase.auth.token.refresh')) {
+      // Only clean up stale or invalid tokens while preserving the current one
+      if (key.includes('supabase.auth.token') && 
+          key.includes('refresh') && 
+          !key.includes(sessionId)) {
         console.log(`Removing potential conflicting token: ${key}`);
         localStorage.removeItem(key);
       }
     });
+    
+    // If we cleared the current token accidentally, restore it
+    if (currentAuthToken) {
+      localStorage.setItem('supabase.auth.token', currentAuthToken);
+    }
   } catch (e) {
     // Silent error handling
   }
