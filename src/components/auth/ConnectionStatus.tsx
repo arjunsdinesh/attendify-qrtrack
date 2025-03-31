@@ -11,6 +11,20 @@ interface ConnectionStatusProps {
 const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   const [retryAttempted, setRetryAttempted] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [showStatus, setShowStatus] = useState(false);
+  
+  // Don't show status immediately to prevent UI flashing
+  useEffect(() => {
+    // Only show disconnected status after a short delay
+    if (status === 'disconnected') {
+      const timeoutId = setTimeout(() => {
+        setShowStatus(true);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setShowStatus(status === 'checking');
+    }
+  }, [status]);
   
   // Reset retry status when connection status changes
   useEffect(() => {
@@ -26,8 +40,13 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
       onRetry();
     }
   };
+
+  // Return null for connected to prevent UI flashing
+  if (status === 'connected' || (status !== 'disconnected' && !showStatus)) {
+    return null;
+  }
   
-  if (status === 'checking') {
+  if (status === 'checking' && showStatus) {
     return (
       <div className="bg-amber-50 p-2 rounded-t-lg border-b border-amber-200">
         <div className="flex items-center text-amber-700 text-sm">
@@ -37,19 +56,8 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
       </div>
     );
   }
-  
-  if (status === 'connected') {
-    return (
-      <div className="bg-green-50 p-2 rounded-t-lg border-b border-green-200">
-        <div className="flex items-center text-green-700 text-sm">
-          <CheckCircle className="h-4 w-4 mr-2" />
-          <span>Database connected</span>
-        </div>
-      </div>
-    );
-  }
 
-  if (status === 'disconnected') {
+  if (status === 'disconnected' && showStatus) {
     return (
       <div className="bg-red-50 p-2 rounded-t-lg border-b border-red-200">
         <div className="flex items-center text-red-700 text-sm">

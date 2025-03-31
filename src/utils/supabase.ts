@@ -29,40 +29,40 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Ultra-fast connection check function with minimal delay
+// More reliable connection check function with better timeout handling
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    // Skip detailed logging to reduce processing time
+    // Set a timeout that's longer to prevent unnecessary aborts
+    const timeoutPromise = new Promise<boolean>((resolve) => {
+      setTimeout(() => resolve(true), 5000); // 5 second timeout - more generous to prevent false negatives
+    });
     
-    // Set very short timeout for faster response
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 300); // Even faster - 300ms
-    
-    try {
-      // Use a simple query to check connection
-      const { error } = await supabase
-        .from('profiles')
-        .select('count', { count: 'exact', head: true })
-        .limit(1)
-        .abortSignal(controller.signal);
-      
-      clearTimeout(timeoutId);
-      
-      if (!error) {
-        return true;
+    // Use a simple query to check connection
+    const queryPromise = new Promise<boolean>(async (resolve) => {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .select('count', { count: 'exact', head: true })
+          .limit(1);
+          
+        if (!error) {
+          console.log('Database connection successful');
+          resolve(true);
+        } else {
+          console.error('Database connection error:', error);
+          resolve(false);
+        }
+      } catch (e) {
+        console.error('Database connection exception:', e);
+        resolve(false);
       }
-      
-      // Don't log errors to avoid blocking rendering
-      return false;
-      
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      
-      // For timeout or any error, assume connection is OK for better UX
-      return true;
-    }
+    });
+    
+    // Race between timeout and query - whichever resolves first wins
+    return await Promise.race([queryPromise, timeoutPromise]);
   } catch (error: any) {
-    // Assume connection for any error
+    // For any unexpected error, assume connection is available to avoid blocking UI
+    console.log('Unexpected error in connection check, assuming connection available:', error);
     return true;
   }
 };

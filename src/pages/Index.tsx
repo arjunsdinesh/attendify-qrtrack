@@ -26,21 +26,27 @@ const Index = () => {
 
   const checkConnection = async () => {
     try {
-      setDbConnected(null);
-      
       const timeoutId = setTimeout(() => {
-        setConnectionCheckTimeout(true);
-        setDbConnected(true);
-      }, 400);
+        setDbConnected(null);
+      }, 500);
       
-      const connected = await checkSupabaseConnection();
+      const connectionTimeoutPromise = new Promise<boolean>(resolve => {
+        setTimeout(() => {
+          setConnectionCheckTimeout(true);
+          resolve(true);
+        }, 3000);
+      });
+      
+      const connected = await Promise.race([
+        checkSupabaseConnection(),
+        connectionTimeoutPromise
+      ]);
       
       clearTimeout(timeoutId);
       
       setDbConnected(connected);
       if (!connected) {
         console.error('Database connection failed');
-        toast.error('Database connection failed. Please check your network.');
       }
     } catch (error) {
       setDbConnected(true);
@@ -54,12 +60,16 @@ const Index = () => {
     setDbConnected(true);
     
     setTimeout(() => {
+      checkConnection();
+    }, 100);
+    
+    const backupTimeoutId = setTimeout(() => {
       if (dbConnected === null) {
         setDbConnected(true);
       }
-    }, 200);
+    }, 5000);
     
-    checkConnection();
+    return () => clearTimeout(backupTimeoutId);
   }, []);
 
   useEffect(() => {
@@ -81,14 +91,6 @@ const Index = () => {
       toast.success('Email confirmed successfully! You can now log in.');
     }
   }, [emailConfirmationChecked]);
-
-  if (false && loading && !connectionCheckTimeout && !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner className="h-8 w-8" />
-      </div>
-    );
-  }
 
   if (!user) {
     const connectionStatus = dbConnected === null ? 'checking' : 
