@@ -1,3 +1,4 @@
+
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -7,19 +8,35 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Mail } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import ConnectionStatus from '@/components/auth/ConnectionStatus';
 import { Button } from '@/components/ui/button';
 
-const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
+// Use dynamic import with error handling
+const AuthForm = lazy(() => 
+  import('@/components/auth/AuthForm')
+    .catch(err => {
+      console.error('Failed to load AuthForm:', err);
+      return { 
+        default: () => <div>Login form failed to load. Please refresh the page.</div> 
+      };
+    })
+);
 
 const Index = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [dbConnected, setDbConnected] = useState<boolean | null>(true);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
-
+  
+  // Added a timeout to force UI update after a short delay
   useEffect(() => {
-    setEmailConfirmationChecked(true);
+    const timer = setTimeout(() => {
+      setEmailConfirmationChecked(true);
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Check for email confirmation in URL
+  useEffect(() => {
     const hasEmailConfirmation = getEmailConfirmationFromUrl();
     
     if (hasEmailConfirmation) {
@@ -27,6 +44,7 @@ const Index = () => {
     }
   }, []);
 
+  // Redirect authenticated users
   useEffect(() => {
     if (!authLoading && user) {
       const destination = user.role === 'student' ? '/student' : '/teacher';
@@ -39,9 +57,11 @@ const Index = () => {
     return urlParams.get('email_confirmed') === 'true';
   };
 
+  // Always render immediately to prevent blank screens
+  // Only show loading spinner if explicitly loading auth AND we have no user yet
+  const isActuallyLoading = authLoading && !user;
+
   if (!user) {
-    const connectionStatus = 'connected';
-    
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
@@ -72,6 +92,7 @@ const Index = () => {
     );
   }
 
+  // If we have a user, render the appropriate dashboard
   return (
     <DashboardLayout>
       {user.role === 'teacher' ? (
