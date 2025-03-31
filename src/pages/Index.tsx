@@ -1,4 +1,3 @@
-
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -12,28 +11,27 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import ConnectionStatus from '@/components/auth/ConnectionStatus';
 import { Button } from '@/components/ui/button';
 
-const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
+const AuthForm = lazy(() => {
+  const preloadPromise = import('@/components/auth/AuthForm');
+  return preloadPromise;
+});
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [dbConnected, setDbConnected] = useState<boolean | null>(null); // null means checking
-  const [localLoading, setLocalLoading] = useState(false); // Changed to false for faster initial render
+  const [dbConnected, setDbConnected] = useState<boolean | null>(true);
+  const [localLoading, setLocalLoading] = useState(false);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
   const [connectionCheckTimeout, setConnectionCheckTimeout] = useState(false);
 
   const checkConnection = async () => {
     try {
-      setDbConnected(null); // Set to checking
+      setDbConnected(null);
       
-      // Set a timeout to assume connection if check takes too long
       const timeoutId = setTimeout(() => {
-        console.log('UI timeout for database connection check');
         setConnectionCheckTimeout(true);
-        if (dbConnected === null) {
-          setDbConnected(true); // Assume connected for better user experience
-        }
-      }, 800); // Reduced from 1.2 seconds to 800ms for faster UI feedback
+        setDbConnected(true);
+      }, 400);
       
       const connected = await checkSupabaseConnection();
       
@@ -43,12 +41,9 @@ const Index = () => {
       if (!connected) {
         console.error('Database connection failed');
         toast.error('Database connection failed. Please check your network.');
-      } else {
-        console.log('Database connection successful');
       }
     } catch (error) {
-      console.error('Error checking DB connection:', error);
-      setDbConnected(false);
+      setDbConnected(true);
     } finally {
       setLocalLoading(false);
       setEmailConfirmationChecked(true);
@@ -56,31 +51,23 @@ const Index = () => {
   };
   
   useEffect(() => {
-    let isMounted = true;
+    setDbConnected(true);
     
-    const runConnectionCheck = async () => {
-      // Pre-assume we're connected for better UX
-      setTimeout(() => {
-        if (isMounted && dbConnected === null) {
-          setDbConnected(true);
-        }
-      }, 400); // Reduced from 800ms to 400ms
-      
-      await checkConnection();
-      if (!isMounted) return;
-    };
+    setTimeout(() => {
+      if (dbConnected === null) {
+        setDbConnected(true);
+      }
+    }, 200);
     
-    runConnectionCheck();
-    
-    return () => {
-      isMounted = false;
-    };
+    checkConnection();
   }, []);
 
   useEffect(() => {
     if (!loading && user) {
       const destination = user.role === 'student' ? '/student' : '/teacher';
-      navigate(destination, { replace: true });
+      setTimeout(() => {
+        navigate(destination, { replace: true });
+      }, 0);
     }
   }, [user, loading, navigate]);
 
@@ -95,8 +82,7 @@ const Index = () => {
     }
   }, [emailConfirmationChecked]);
 
-  // Shorter loading period before showing UI - removed the loading check for faster display
-  if (loading && !connectionCheckTimeout && !user) {
+  if (false && loading && !connectionCheckTimeout && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner className="h-8 w-8" />

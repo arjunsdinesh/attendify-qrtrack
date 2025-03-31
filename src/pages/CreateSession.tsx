@@ -14,17 +14,17 @@ const CreateSession = () => {
   const classId = searchParams.get('class');
   const [localLoading, setLocalLoading] = useState(false);
   
-  // Improved loading behavior with timeout
+  // Improved loading behavior with shorter timeout
   useEffect(() => {
     // Start with optimistic assumption of loading completion
     const timeoutId = setTimeout(() => {
       setLocalLoading(false);
-    }, 800); // Quick timeout to prevent stuck loading
+    }, 300); // Ultra-fast timeout to prevent stuck loading
     
     return () => clearTimeout(timeoutId);
   }, []);
   
-  // Redirect if not authenticated or not a teacher
+  // Redirect if not authenticated or not a teacher, with optimistic rendering
   useEffect(() => {
     if (!loading && (!user || user.role !== 'teacher')) {
       toast.error('Only teachers can create attendance sessions');
@@ -44,7 +44,7 @@ const CreateSession = () => {
           ← Back to Dashboard
         </Button>
         
-        {/* Render SessionControls optimistically, let it handle its own loading state */}
+        {/* Render SessionControls optimistically, even before auth check completes */}
         <SessionControls userId={user?.id || ''} />
       </div>
     </DashboardLayout>

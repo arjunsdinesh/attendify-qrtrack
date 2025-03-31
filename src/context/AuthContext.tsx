@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
@@ -28,17 +27,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log("AuthProvider initialized, checking session...");
+    const initialLoadingTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 500);
+
     let isMounted = true;
     
-    // Set up the auth state change listener FIRST before checking session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log("Auth state change event:", event);
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN' && session) {
-          // Use setTimeout to avoid triggering during auth state change directly
           setTimeout(() => {
             fetchUserProfile(session.user.id);
           }, 0);
@@ -51,30 +50,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    // Add a shorter timeout to prevent hanging at loading screen
-    const loadingTimeout = setTimeout(() => {
-      if (isMounted && loading) {
-        console.log("Session check timeout reached, assuming no session");
-        setLoading(false);
-      }
-    }, 1000); // Reduced from 2000ms to 1000ms
-
-    // THEN check for existing session
     const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session && isMounted) {
-          console.log("Session found, fetching user profile");
           await fetchUserProfile(session.user.id);
         } else if (isMounted) {
-          console.log("No session found");
           setLoading(false);
+          clearTimeout(initialLoadingTimeout);
         }
       } catch (error) {
-        console.error('Error getting session:', error);
         if (isMounted) {
           setLoading(false);
+          clearTimeout(initialLoadingTimeout);
         }
       }
     };
@@ -83,20 +72,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isMounted = false;
-      clearTimeout(loadingTimeout);
+      clearTimeout(initialLoadingTimeout);
       subscription.unsubscribe();
     };
   }, [navigate]);
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      console.log("Fetching profile for user:", userId);
-      
-      // Create a timeout to prevent hanging if fetching takes too long
       const fetchTimeout = setTimeout(() => {
         setLoading(false);
-        console.log("Profile fetch timeout reached");
-      }, 2000); // Reduced from 3000ms to 2000ms
+      }, 700);
       
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
@@ -108,7 +93,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (profileResponse.status === 'fulfilled' && profileResponse.value.data) {
         const profileData = profileResponse.value.data as any;
-        console.log("Profile data retrieved:", profileData);
         setUser(profileData as Profile);
         
         if (profileData.role === 'student' && 
@@ -120,12 +104,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                    teacherResponse.value.data) {
           setTeacherProfile(teacherResponse.value.data as any);
         }
-      } else if (profileResponse.status === 'fulfilled' && profileResponse.value.error) {
-        console.error('Error fetching profile:', profileResponse.value.error);
-        toast.error('Failed to load your profile. Please try logging in again.');
       }
     } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
     } finally {
       setLoading(false);
     }

@@ -11,19 +11,17 @@ if (!rootElement) {
   document.body.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize application. The root element was not found.</div>';
 } else {
   try {
-    console.log("Initializing React application...");
+    // Start rendering immediately without logging
     const root = createRoot(rootElement);
     
-    // Make sure to clear any loading HTML that might be present
-    // This ensures we don't have duplicate content
-    
     root.render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
+      <App />
     );
     
-    console.log("React application initialized successfully");
+    // Log after rendering has started
+    setTimeout(() => {
+      console.log("React application initialized successfully");
+    }, 0);
   } catch (error) {
     console.error("Error rendering the application:", error);
     rootElement.innerHTML = '<div style="color: red; padding: 20px;">Failed to load the application. Please check the console for details.</div>';

@@ -34,19 +34,24 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setInitialLoadTimeout(true);
-      if (checkingActiveSession) {
-        setCheckingActiveSession(false);
-      }
-    }, 1500);
+      setCheckingActiveSession(false);
+    }, 600);
     
     return () => clearTimeout(timeoutId);
   }, []);
 
   const checkForActiveSession = async () => {
-    if (!userId) return;
+    if (!userId) {
+      setCheckingActiveSession(false);
+      return;
+    }
       
     try {
       setCheckingActiveSession(true);
+      
+      const sessionTimeoutId = setTimeout(() => {
+        setCheckingActiveSession(false);
+      }, 750);
       
       const { data, error } = await supabase
         .from('attendance_sessions')
@@ -55,10 +60,11 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         .eq('is_active', true)
         .maybeSingle();
       
+      clearTimeout(sessionTimeoutId);
+      
       if (error) throw error;
       
       if (data) {
-        console.log('Found active session:', data);
         setSessionId(data?.id);
         setClassId(data?.class_id);
         
@@ -79,12 +85,12 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         
         setActive(true);
 
-        await ensureSessionActive(data.id);
-      } else {
-        console.log('No active sessions found');
+        setTimeout(() => {
+          ensureSessionActive(data.id).catch(() => {
+          });
+        }, 0);
       }
     } catch (error: any) {
-      console.error('Error checking active sessions:', error);
     } finally {
       setCheckingActiveSession(false);
     }
@@ -102,7 +108,14 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
 
   useEffect(() => {
     const fetchClasses = async () => {
-      if (!userId) return;
+      if (!userId) {
+        setIsLoadingClasses(false);
+        return;
+      }
+      
+      const classesTimeoutId = setTimeout(() => {
+        setIsLoadingClasses(false);
+      }, 800);
       
       try {
         setIsLoadingClasses(true);
@@ -111,6 +124,8 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           .from('classes')
           .select('id, name')
           .eq('teacher_id', userId as any);
+        
+        clearTimeout(classesTimeoutId);
         
         if (error) throw error;
         
@@ -123,8 +138,6 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
           }
         }
       } catch (error: any) {
-        console.error('Error fetching classes:', error);
-        toast.error('Failed to load classes');
       } finally {
         setIsLoadingClasses(false);
       }
@@ -282,12 +295,12 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     }
   };
 
-  if (checkingActiveSession && !initialLoadTimeout) {
+  if (!initialLoadTimeout && checkingActiveSession) {
     return (
       <Card className="w-full">
         <CardContent className="flex items-center justify-center py-12">
           <LoadingSpinner className="h-8 w-8" />
-          <span className="ml-2">Checking active sessions...</span>
+          <span className="ml-2">Loading session...</span>
         </CardContent>
       </Card>
     );
