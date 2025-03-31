@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +19,7 @@ const AuthForm = () => {
   useEffect(() => {
     console.log("AuthForm mounted, checking connection...");
     
-    // Immediately assume we're connected to prevent UI blocking
+    // Always assume we're connected initially to prevent blocking the UI
     setConnectionStatus('connected');
     setIsLoading(false);
     
@@ -30,7 +29,10 @@ const AuthForm = () => {
         // Use Promise.race with a timeout to prevent blocking
         const connectionPromise = checkSupabaseConnection();
         const timeoutPromise = new Promise<boolean>(resolve => {
-          setTimeout(() => resolve(true), 3000);
+          setTimeout(() => {
+            console.log("Connection check taking too long, assuming connected");
+            resolve(true);
+          }, 5000);
         });
         
         const isConnected = await Promise.race([connectionPromise, timeoutPromise]);
@@ -53,7 +55,7 @@ const AuthForm = () => {
     // Delay the check slightly to prioritize UI rendering
     const timerId = setTimeout(() => {
       checkConnection();
-    }, 100);
+    }, 200);
     
     return () => clearTimeout(timerId);
   }, [retryCount]);
@@ -71,13 +73,10 @@ const AuthForm = () => {
   return (
     <div className="max-w-md w-full mx-auto">
       <Card className="bg-white/95 backdrop-blur-sm border border-border/50 shadow-soft">
-        {/* Only show ConnectionStatus if checking or disconnected */}
-        {connectionStatus !== 'connected' && (
-          <ConnectionStatus 
-            status={connectionStatus} 
-            onRetry={handleRetryConnection} 
-          />
-        )}
+        <ConnectionStatus 
+          status={connectionStatus} 
+          onRetry={handleRetryConnection} 
+        />
         
         <Tabs 
           value={authMode} 

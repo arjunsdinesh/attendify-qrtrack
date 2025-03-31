@@ -15,14 +15,16 @@ const ConnectionStatus = ({ status, onRetry }: ConnectionStatusProps) => {
   
   // Don't show status immediately to prevent UI flashing
   useEffect(() => {
-    // Only show disconnected status after a short delay
-    if (status === 'disconnected') {
+    // Show checking status immediately, but delay disconnected status
+    if (status === 'checking') {
+      setShowStatus(true);
+    } else if (status === 'disconnected') {
       const timeoutId = setTimeout(() => {
         setShowStatus(true);
-      }, 300);
+      }, 500); // Slightly longer delay to avoid flickering
       return () => clearTimeout(timeoutId);
     } else {
-      setShowStatus(status === 'checking');
+      setShowStatus(false); // Hide when connected
     }
   }, [status]);
   
