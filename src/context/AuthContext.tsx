@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
@@ -27,17 +28,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    const initialLoadingTimeout = setTimeout(() => {
+    // Always stop loading after a timeout to prevent infinite loading states
+    const loadingTimeout = setTimeout(() => {
       setLoading(false);
-    }, 500);
+    }, 2000);
 
     let isMounted = true;
     
+    // Setup auth subscription
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN' && session) {
+          // Use setTimeout to avoid blocking the UI thread
           setTimeout(() => {
             fetchUserProfile(session.user.id);
           }, 0);
@@ -50,42 +54,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    const getSession = async () => {
+    // Check for existing session - but don't block UI rendering on this
+    setTimeout(async () => {
+      if (!isMounted) return;
+      
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session && isMounted) {
-          setTimeout(() => {
-            fetchUserProfile(session.user.id);
-          }, 0);
+          fetchUserProfile(session.user.id);
         } else if (isMounted) {
           setLoading(false);
-          clearTimeout(initialLoadingTimeout);
         }
       } catch (error) {
-        if (isMounted) {
-          console.error("Session error:", error);
-          setLoading(false);
-          clearTimeout(initialLoadingTimeout);
-        }
+        console.error("Session error:", error);
+        if (isMounted) setLoading(false);
       }
-    };
-
-    getSession();
+    }, 0);
 
     return () => {
       isMounted = false;
-      clearTimeout(initialLoadingTimeout);
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, [navigate]);
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      // Set a maximum time for profile fetching to prevent loading state getting stuck
       const fetchTimeout = setTimeout(() => {
         setLoading(false);
-      }, 700);
+      }, 1500);
       
+      // Use Promise.allSettled to prevent one request from blocking others
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('student_profiles').select('*').eq('id', userId).maybeSingle(),

@@ -6,55 +6,65 @@ import './index.css';
 
 // Use an IIFE for immediate execution with robust multi-device support
 (function renderApp() {
-  // Create a unique session identifier for this browser tab
-  const sessionId = crypto.randomUUID();
-  console.log(`Initializing app with session ID: ${sessionId}`);
-  
-  // Get the root element and render immediately
+  // Get the root element and render immediately without delay
   const rootElement = document.getElementById("root");
 
   if (!rootElement) {
     console.error("Failed to find the root element");
-    document.body.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize application. The root element was not found.</div>';
     return;
   }
   
-  // Handle local storage to prevent cross-device conflicts while preserving authentication
+  // Prevent clearing auth token during initialization
   try {
-    // Preserve the current authentication token
     const currentAuthToken = localStorage.getItem('supabase.auth.token');
     
-    // Only clean potentially conflicting refresh tokens from other sessions
-    Object.keys(localStorage).forEach(key => {
-      if (key.includes('supabase.auth.token') && 
-          key.includes('refresh') && 
-          !key.includes(sessionId) &&
-          key !== 'supabase.auth.token') {
-        console.log(`Cleaning up potential conflicting token: ${key}`);
-        localStorage.removeItem(key);
-      }
-    });
+    // Create root and render app immediately without waiting for any async operations
+    const root = createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
     
-    // Make sure we didn't accidentally remove the current token
-    if (currentAuthToken) {
-      localStorage.setItem('supabase.auth.token', currentAuthToken);
-    }
+    // Clean up stale tokens in the background AFTER rendering
+    setTimeout(() => {
+      try {
+        // Generate a unique session ID for this tab
+        const sessionId = crypto.randomUUID();
+        console.log(`App initialized with session ID: ${sessionId}`);
+        
+        // Only clean potentially conflicting refresh tokens from other sessions
+        Object.keys(localStorage).forEach(key => {
+          if (key.includes('supabase.auth.token') && 
+              key.includes('refresh') && 
+              !key.includes(sessionId) &&
+              key !== 'supabase.auth.token') {
+            console.log(`Cleaning up potential conflicting token: ${key}`);
+            localStorage.removeItem(key);
+          }
+        });
+        
+        // Make sure we didn't accidentally remove the current token
+        if (currentAuthToken) {
+          localStorage.setItem('supabase.auth.token', currentAuthToken);
+        }
+        
+        // Store the current tab's session ID in sessionStorage (not localStorage)
+        sessionStorage.setItem('app_session_id', sessionId);
+      } catch (e) {
+        console.log("Error handling local storage, continuing anyway:", e);
+      }
+    }, 100);
   } catch (e) {
-    console.log("Error handling local storage, continuing anyway:", e);
+    console.log("Error during initialization, continuing anyway:", e);
+    // Render the app even if there's an error with localStorage
+    const root = createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
   }
-  
-  // Create root and render app immediately without waiting for any async operations
-  const root = createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-  
-  console.log(`React application initialized with session ID: ${sessionId}`);
-  
-  // Store the current tab's session ID in sessionStorage (not localStorage)
-  sessionStorage.setItem('app_session_id', sessionId);
 })();
 
 // Global error handler

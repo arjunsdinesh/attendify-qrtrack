@@ -1,72 +1,44 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { checkSupabaseConnection } from '@/utils/supabase';
 import { toast } from 'sonner';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
-import ConnectionStatus from './ConnectionStatus';
 
 const AuthForm = () => {
   const { initialRole } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('connected');
-  const [retryCount, setRetryCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
   
   // Generate a unique form instance ID
   const [formInstanceId] = useState(() => `form_${Math.random().toString(36).substring(2, 9)}`);
 
-  // Always assume connection is successful initially
-  useEffect(() => {
-    console.log(`AuthForm mounted (instance: ${formInstanceId})`);
-    
-    // Always start as connected for better UX
-    setConnectionStatus('connected');
-    setIsLoading(false);
-    
-    // Clean up potentially problematic session data
-    const clearStaleSessionData = () => {
-      try {
-        // Be very selective about what we clear
-        const keysToPreserve = ['supabase.auth.token'];
-        
-        // Only clean up obviously stale data
-        Object.keys(localStorage).forEach(key => {
-          if (!keysToPreserve.includes(key) && (key.includes('supabase.auth.') && key !== 'supabase.auth.token')) {
-            console.log(`Cleaning up potentially stale auth data: ${key}`);
-            localStorage.removeItem(key);
-          }
-        });
-      } catch (e) {
-        console.log('Error cleaning session data, continuing anyway');
-      }
-    };
-    
-    // Run cleanup in non-blocking way
-    setTimeout(clearStaleSessionData, 300);
-  }, [retryCount, formInstanceId]);
-
-  // Retry handler that always assumes success
-  const handleRetryConnection = async () => {
-    console.log(`Retrying connection (instance: ${formInstanceId})...`);
-    setConnectionStatus('connected'); // Optimistic update
-    setRetryCount(prev => prev + 1);
+  // Clean up potentially problematic session data
+  const clearStaleSessionData = () => {
+    try {
+      // Be very selective about what we clear
+      const keysToPreserve = ['supabase.auth.token'];
+      
+      // Only clean up obviously stale data
+      Object.keys(localStorage).forEach(key => {
+        if (!keysToPreserve.includes(key) && (key.includes('supabase.auth.') && key !== 'supabase.auth.token')) {
+          console.log(`Cleaning up potentially stale auth data: ${key}`);
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      console.log('Error cleaning session data, continuing anyway');
+    }
   };
-
-  console.log(`Rendering AuthForm (instance: ${formInstanceId}) with connectionStatus:`, connectionStatus);
+    
+  // Run cleanup in non-blocking way
+  setTimeout(clearStaleSessionData, 300);
 
   // Always render form immediately
   return (
     <div className="max-w-md w-full mx-auto">
       <Card className="bg-white/95 backdrop-blur-sm border border-border/50 shadow-soft">
-        <ConnectionStatus 
-          status={connectionStatus} 
-          onRetry={handleRetryConnection} 
-        />
-        
         <Tabs 
           value={authMode} 
           onValueChange={(value) => setAuthMode(value as 'login' | 'register')}
@@ -85,7 +57,7 @@ const AuthForm = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <LoginForm connectionStatus={connectionStatus} />
+              <LoginForm connectionStatus="connected" />
             </CardContent>
           </TabsContent>
           
@@ -97,7 +69,7 @@ const AuthForm = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <RegisterForm connectionStatus={connectionStatus} />
+              <RegisterForm connectionStatus="connected" />
             </CardContent>
           </TabsContent>
         </Tabs>
