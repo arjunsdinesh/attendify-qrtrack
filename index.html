@@ -10,6 +10,9 @@
     <meta property="og:image" content="/og-image.png" />
     <!-- Preconnect to critical origins -->
     <link rel="preconnect" href="https://wmhmdacynswuyhzfbptu.supabase.co" crossorigin />
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/src/main.tsx" as="script" />
+    <link rel="preload" href="/src/App.tsx" as="script" />
   </head>
 
   <body>
@@ -30,6 +33,12 @@
         display: block !important;
         opacity: 1 !important;
         visibility: visible !important;
+      }
+      /* Optimize initial page rendering */
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f5f5f5;
       }
     </style>
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->

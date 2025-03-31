@@ -35,35 +35,23 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
   const requestId = `check_${Math.random().toString(36).substring(2, 9)}`;
   console.log(`Starting connection check (${requestId})`);
   
-  // Check if another tab is already authenticated with minimal overhead
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session) {
-      console.log(`Found existing session (${requestId})`);
-    }
-  } catch (e) {
-    // Ignore errors here - we'll always assume connected
-  }
-
   // Skip heavy connection checks and always assume connected
   return true;
 };
 
 // Create the force_activate_session RPC if it doesn't exist - delayed execution
 const createForceActivateRPC = async () => {
-  try {
-    // Check if the function exists by calling it with a dummy value
-    const { error } = await supabase.rpc('force_activate_session', { 
-      session_id: '00000000-0000-0000-0000-000000000000' 
-    });
-    
-    // Minimal error handling to speed up processing
-    if (error && error.message.includes('no rows')) {
-      // Function exists - no need for logging
+  // Execution deferred to not block UI rendering
+  setTimeout(async () => {
+    try {
+      // Minimal check without blocking rendering
+      const { error } = await supabase.rpc('force_activate_session', { 
+        session_id: '00000000-0000-0000-0000-000000000000' 
+      });
+    } catch (error) {
+      // Silent error handling to prevent UI blocking
     }
-  } catch (error) {
-    // Silent error handling
-  }
+  }, 5000);
 };
 
 // Export the supabase client for backwards compatibility

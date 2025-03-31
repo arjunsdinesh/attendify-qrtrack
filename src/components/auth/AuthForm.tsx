@@ -48,17 +48,6 @@ const AuthForm = () => {
     
     // Attempt to clear any problematic data in a non-blocking way
     setTimeout(clearStaleSessionData, 300);
-    
-    // Non-blocking background check
-    setTimeout(() => {
-      checkSupabaseConnection().then(isConnected => {
-        if (!isConnected && retryCount > 2) {
-          setConnectionStatus('disconnected');
-        }
-      }).catch(() => {
-        // Keep UI working even on connection error
-      });
-    }, 1000);
   }, [retryCount, formInstanceId]);
 
   // Retry connection when disconnected
