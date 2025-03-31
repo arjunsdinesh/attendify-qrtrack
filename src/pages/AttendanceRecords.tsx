@@ -45,7 +45,7 @@ interface StudentData {
 interface AttendanceRecord {
   id: string;
   timestamp: string;
-  student: StudentData;
+  student: StudentData | null;
 }
 
 const AttendanceRecords = () => {
@@ -192,7 +192,7 @@ const AttendanceRecords = () => {
         return {
           id: record.id,
           timestamp: record.timestamp,
-          student: studentData as StudentData
+          student: studentData as StudentData | null
         };
       });
       
@@ -341,10 +341,10 @@ const AttendanceRecords = () => {
                       {records.map((record) => (
                         <TableRow key={record.id}>
                           <TableCell className="font-medium">
-                            {record.student.full_name}
+                            {record.student?.full_name || "Unknown Student"}
                           </TableCell>
                           <TableCell>
-                            {record.student.student_profiles[0]?.register_number || '-'}
+                            {record.student?.student_profiles?.[0]?.register_number || '-'}
                           </TableCell>
                           <TableCell>
                             {format(parseISO(record.timestamp), 'h:mm a')}
