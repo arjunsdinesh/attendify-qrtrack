@@ -32,12 +32,12 @@ export interface TeacherProfile {
 // More reliable connection check function with better timeout handling
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    // Set a longer timeout to prevent premature failure on slow connections
+    // Set a shorter timeout to prevent UI blocking but still allow for reasonable network delays
     const timeoutPromise = new Promise<boolean>((resolve) => {
       setTimeout(() => {
         console.log('Connection check timeout reached, assuming connection is available');
         resolve(true); // Assume connection is available after timeout
-      }, 8000); // 8 second timeout - more generous for slow connections
+      }, 3000); // 3 second timeout - faster to prevent UI blocking
     });
     
     // Use a simple query to check connection
@@ -61,9 +61,8 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       }
     });
     
-    // Race between timeout and query - whichever resolves first wins
-    // This prevents the app from getting stuck waiting for a response
-    return await Promise.race([queryPromise, timeoutPromise]);
+    // Always prioritize the timeout to ensure UI doesn't get blocked
+    return await Promise.race([timeoutPromise, queryPromise]);
   } catch (error: any) {
     // For any unexpected error, assume connection is available to avoid blocking UI
     console.log('Unexpected error in connection check, assuming connection available:', error);
@@ -91,7 +90,7 @@ const createForceActivateRPC = async () => {
 // Export the supabase client for backwards compatibility
 export { supabase };
 
-// Initialize check with greater delay to prioritize UI rendering completely
+// Initialize check with minimal delay to prevent execution during initial rendering
 setTimeout(() => {
   createForceActivateRPC();
-}, 10000); // Increased to 10 seconds to ensure UI is fully loaded first
+}, 5000);
