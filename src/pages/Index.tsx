@@ -22,11 +22,16 @@ const Index = () => {
     setEmailConfirmationChecked(true);
   }, []);
 
-  // Fast redirect for authenticated users
+  // Non-blocking redirect for authenticated users with short circuit
   useEffect(() => {
-    if (!loading && user) {
-      const destination = user.role === 'student' ? '/student' : '/teacher';
-      navigate(destination, { replace: true });
+    if (user && !loading) {
+      // Delay navigation slightly to prevent race conditions
+      const timer = setTimeout(() => {
+        const destination = user.role === 'student' ? '/student' : '/teacher';
+        navigate(destination, { replace: true });
+      }, 10);
+      
+      return () => clearTimeout(timer);
     }
   }, [user, loading, navigate]);
 
@@ -42,7 +47,8 @@ const Index = () => {
     }
   }, [emailConfirmationChecked]);
 
-  // Always render immediately - don't wait for loading states
+  // Render optimistically - don't wait for loading states
+  // If user is null, show login form immediately
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
@@ -74,6 +80,7 @@ const Index = () => {
     );
   }
 
+  // User dashboard based on role
   return (
     <DashboardLayout>
       {user.role === 'teacher' ? (

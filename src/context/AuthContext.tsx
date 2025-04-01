@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Profile, StudentProfile, TeacherProfile } from '@/utils/supabase';
@@ -29,15 +30,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
 
+    // Set a short timeout to avoid blocking UI
     const initialLoadingTimeout = setTimeout(() => {
       if (isMounted) setLoading(false);
-    }, 300);
+    }, 200);
     
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!isMounted) return;
         
         if (event === 'SIGNED_IN' && session) {
+          // Use setTimeout to make this non-blocking
           setTimeout(() => {
             if (isMounted) fetchUserProfile(session.user.id);
           }, 0);
@@ -50,11 +54,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // Check for existing session in a non-blocking way
     const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session && isMounted) {
+          // Use setTimeout to make this non-blocking
           setTimeout(() => {
             if (isMounted) fetchUserProfile(session.user.id);
           }, 0);
@@ -77,10 +83,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      // Set a short timeout to avoid UI freezes
       const fetchTimeout = setTimeout(() => {
         setLoading(false);
-      }, 500);
+      }, 300);
       
+      // Fetch all profile data in parallel with Promise.allSettled
       const [profileResponse, studentResponse, teacherResponse] = await Promise.allSettled([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('student_profiles').select('*').eq('id', userId).maybeSingle(),

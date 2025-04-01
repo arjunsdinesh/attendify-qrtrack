@@ -1,4 +1,5 @@
 
+
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,9 +30,22 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Simplified connection check that returns immediately
+// Fast connection check that returns immediately and does background validation
 export const checkSupabaseConnection = async (): Promise<boolean> => {
-  return true; // Always return true to prevent blocking the UI
+  // Immediately return true to prevent UI blocking
+  setTimeout(async () => {
+    try {
+      // Run a lightweight query in the background
+      const { error } = await supabase.from('profiles').select('count').limit(1);
+      if (error) {
+        console.warn('Background Supabase connection check failed:', error.message);
+      }
+    } catch (e) {
+      // Silently fail in the background
+    }
+  }, 0);
+  
+  return true;
 };
 
 // Export the supabase client

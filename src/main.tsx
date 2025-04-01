@@ -12,7 +12,7 @@ if (!rootElement) {
   document.body.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize application. The root element was not found.</div>';
 } else {
   try {
-    // Create root and render immediately
+    // Create root and render immediately without waiting
     const root = createRoot(rootElement);
     root.render(
       <React.StrictMode>
@@ -21,6 +21,20 @@ if (!rootElement) {
     );
     
     console.log("React application initialized successfully");
+    
+    // Clean up stale sessions in the background
+    setTimeout(() => {
+      try {
+        const keysToPreserve = ['supabase.auth.token'];
+        Object.keys(localStorage).forEach(key => {
+          if (!keysToPreserve.includes(key) && key.includes('supabase.auth.') && key !== 'supabase.auth.token') {
+            localStorage.removeItem(key);
+          }
+        });
+      } catch (e) {
+        // Ignore localStorage errors
+      }
+    }, 200);
   } catch (error) {
     console.error("Failed to initialize React:", error);
     const errorDiv = document.createElement('div');
