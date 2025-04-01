@@ -16,8 +16,8 @@ const AuthForm = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Generate a unique form instance ID on component mount
-  const [formInstanceId] = useState(() => `form_${Math.random().toString(36).substring(2, 9)}`);
+  // Generate a unique form instance ID on component mount with device timestamp
+  const [formInstanceId] = useState(() => `form_${Math.random().toString(36).substring(2, 9)}_${new Date().getTime().toString(36)}`);
 
   // Simplified connection check with priority on rendering
   useEffect(() => {
@@ -36,18 +36,18 @@ const AuthForm = () => {
         // Identify any old or stale login sessions in localStorage
         Object.keys(localStorage).forEach(key => {
           if (!keysToPreserve.includes(key) && (key.includes('supabase.auth.') && key !== 'supabase.auth.token')) {
-            console.log(`Cleaning up potentially stale auth data: ${key}`);
+            console.log(`Cleaning up potentially stale auth data: ${key} (instance: ${formInstanceId})`);
             localStorage.removeItem(key);
           }
         });
       } catch (e) {
         // Ignore errors from localStorage operations
-        console.log('Error cleaning session data, continuing anyway');
+        console.log(`Error cleaning session data (instance: ${formInstanceId}), continuing anyway`);
       }
     };
     
-    // Attempt to clear any problematic data in a non-blocking way
-    setTimeout(clearStaleSessionData, 100);
+    // Attempt to clear any problematic data in a non-blocking way with minimal delay
+    setTimeout(clearStaleSessionData, 50);
     
     // Return function that gets called when component is unmounted
     return () => {

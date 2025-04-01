@@ -30,7 +30,8 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
   const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginAttemptId] = useState(() => `login_${Math.random().toString(36).substring(2, 9)}`);
+  // Generate more unique login ID with device timestamp for better debugging
+  const [loginAttemptId] = useState(() => `login_${Math.random().toString(36).substring(2, 9)}_${new Date().getTime().toString(36)}`);
 
   // Log component mount to track potential race conditions
   useEffect(() => {
@@ -51,7 +52,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     },
   });
 
-  // Handle login submission
+  // Handle login submission with enhanced multi-device support
   const onLoginSubmit = async (values: LoginFormValues) => {
     if (connectionStatus === 'disconnected') {
       setFormError('Cannot connect to the database. Please check your internet connection and try again.');
@@ -65,6 +66,20 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     
     try {
       console.log(`Attempting to sign in with: ${values.email} (instance: ${loginAttemptId})`);
+      
+      // Clear any potentially conflicting auth data in localStorage
+      try {
+        const keysToPreserve = ['supabase.auth.token'];
+        Object.keys(localStorage).forEach(key => {
+          if (!keysToPreserve.includes(key) && key.includes('supabase.auth.') && key !== 'supabase.auth.token') {
+            console.log(`Pre-login cleanup: removing ${key} (instance: ${loginAttemptId})`);
+            localStorage.removeItem(key);
+          }
+        });
+      } catch (e) {
+        console.warn(`Error cleaning localStorage before login (instance: ${loginAttemptId}):`, e);
+      }
+      
       const result = await signIn(values.email, values.password);
       console.log(`Sign in result (instance: ${loginAttemptId}):`, result);
     } catch (error: any) {

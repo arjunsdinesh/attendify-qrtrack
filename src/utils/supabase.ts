@@ -29,6 +29,9 @@ export interface TeacherProfile {
   designation?: string;
 }
 
+// Generate device-specific ID for connection checks
+const deviceId = `device_${Math.random().toString(36).substring(2, 9)}`;
+
 // Non-blocking connection check with proper error handling
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   // Always return true immediately to prevent UI blocking
@@ -37,23 +40,27 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       // Use a wrapper function to make the background check more robust
       const backgroundCheck = async () => {
         try {
+          // Add the device ID to easily trace which device is making which request
+          console.log(`Background connection check started (device: ${deviceId})`);
           const { error } = await supabase.from('profiles').select('count').limit(1);
           if (error) {
-            console.warn('Background Supabase connection check failed:', error.message);
+            console.warn(`Background Supabase connection check failed (device: ${deviceId}):`, error.message);
+          } else {
+            console.log(`Background connection check successful (device: ${deviceId})`);
           }
         } catch (e) {
           // Silent fail to avoid errors blocking UI
-          console.warn('Background Supabase connection check threw an exception:', e);
+          console.warn(`Background Supabase connection check threw an exception (device: ${deviceId}):`, e);
         }
       };
       
-      // Execute background check with proper error handling
-      backgroundCheck().catch(e => {
-        console.warn('Failed to start background connection check:', e);
+      // Properly handle all promise rejections to prevent unhandled promise warnings
+      Promise.resolve(backgroundCheck()).catch(e => {
+        console.warn(`Failed to start background connection check (device: ${deviceId}):`, e);
       });
     } catch (e) {
       // Extra safety net
-      console.warn('Error setting up background check:', e);
+      console.warn(`Error setting up background check (device: ${deviceId}):`, e);
     }
   }, 0);
   
