@@ -34,7 +34,9 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
   // Always return true immediately to prevent UI blocking
   setTimeout(() => {
     // Try a lightweight query in the background
-    supabase.from('profiles').select('count').limit(1)
+    Promise.resolve(
+      supabase.from('profiles').select('count').limit(1)
+    )
       .then(({ error }) => {
         if (error) {
           console.warn('Background Supabase connection check failed:', error.message);
