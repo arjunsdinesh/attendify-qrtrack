@@ -9,27 +9,29 @@ import { Mail } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 
-// Fast-load the auth form component
+// Preload the auth form component
 const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
+  const [initialRender, setInitialRender] = useState(true);
 
   // Check for email confirmation immediately
   useEffect(() => {
     setEmailConfirmationChecked(true);
+    // Mark first render complete
+    setInitialRender(false);
   }, []);
 
-  // Non-blocking redirect for authenticated users with short circuit
+  // Non-blocking redirect for authenticated users with shorter timeout
   useEffect(() => {
     if (user && !loading) {
-      // Delay navigation slightly to prevent race conditions
       const timer = setTimeout(() => {
         const destination = user.role === 'student' ? '/student' : '/teacher';
         navigate(destination, { replace: true });
-      }, 10);
+      }, 5); // Reduced from 10ms to 5ms
       
       return () => clearTimeout(timer);
     }
@@ -40,16 +42,8 @@ const Index = () => {
     return urlParams.get('email_confirmed') === 'true';
   };
 
-  // Show email confirmation toast if needed
-  useEffect(() => {
-    if (emailConfirmationChecked && getEmailConfirmationFromUrl()) {
-      // Notification logic here
-    }
-  }, [emailConfirmationChecked]);
-
-  // Render optimistically - don't wait for loading states
-  // If user is null, show login form immediately
-  if (!user) {
+  // Skip initial loading state - render login form immediately if no user
+  if (!user && !initialRender) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
@@ -70,12 +64,21 @@ const Index = () => {
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
               </div>
               
-              <Suspense fallback={<LoadingSpinner className="h-6 w-6 mx-auto" />}>
+              <Suspense fallback={<div className="flex justify-center py-8"><LoadingSpinner className="h-6 w-6" /></div>}>
                 <AuthForm />
               </Suspense>
             </CardContent>
           </Card>
         </div>
+      </div>
+    );
+  }
+
+  // If user is authenticated or still in initial load, show a minimal loading UI
+  if (!user || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <LoadingSpinner className="h-8 w-8" />
       </div>
     );
   }

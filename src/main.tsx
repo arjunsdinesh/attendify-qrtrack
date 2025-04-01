@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Simple direct initialization without complex session handling
+// Get root element immediately without any delays
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
@@ -12,7 +12,7 @@ if (!rootElement) {
   document.body.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize application. The root element was not found.</div>';
 } else {
   try {
-    // Create root and render immediately without waiting
+    // Create root and render immediately without any delays
     const root = createRoot(rootElement);
     root.render(
       <React.StrictMode>
@@ -22,7 +22,7 @@ if (!rootElement) {
     
     console.log("React application initialized successfully");
     
-    // Clean up stale sessions in the background
+    // Clean up stale sessions in the background with a much shorter timeout
     setTimeout(() => {
       try {
         const keysToPreserve = ['supabase.auth.token'];
@@ -34,7 +34,7 @@ if (!rootElement) {
       } catch (e) {
         // Ignore localStorage errors
       }
-    }, 200);
+    }, 50); // Reduced from 200ms to 50ms
   } catch (error) {
     console.error("Failed to initialize React:", error);
     const errorDiv = document.createElement('div');
