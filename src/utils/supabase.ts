@@ -42,6 +42,7 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
       })
       .catch(e => {
         // Silent fail to avoid errors blocking UI
+        console.warn('Background Supabase connection check threw an exception:', e);
       });
   }, 0);
   
