@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -30,6 +30,17 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
   const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginAttemptId] = useState(() => `login_${Math.random().toString(36).substring(2, 9)}`);
+
+  // Log component mount to track potential race conditions
+  useEffect(() => {
+    console.log(`LoginForm mounted (instance: ${loginAttemptId})`);
+
+    // Clean up any overlapping form state when component unmounts
+    return () => {
+      console.log(`LoginForm unmounting (instance: ${loginAttemptId})`);
+    };
+  }, [loginAttemptId]);
 
   // Login form handler
   const loginForm = useForm<LoginFormValues>({
@@ -43,8 +54,8 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
   // Handle login submission
   const onLoginSubmit = async (values: LoginFormValues) => {
     if (connectionStatus === 'disconnected') {
-      setFormError('Cannot connect to the database. Please check your Supabase configuration.');
-      toast.error('Database connection error. Please check your Supabase configuration.');
+      setFormError('Cannot connect to the database. Please check your internet connection and try again.');
+      toast.error('Database connection error. Please check your internet connection.');
       return;
     }
     
@@ -53,11 +64,11 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
     setIsSubmitting(true);
     
     try {
-      console.log('Attempting to sign in with:', values.email);
+      console.log(`Attempting to sign in with: ${values.email} (instance: ${loginAttemptId})`);
       const result = await signIn(values.email, values.password);
-      console.log('Sign in result:', result);
+      console.log(`Sign in result (instance: ${loginAttemptId}):`, result);
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error(`Login error (instance: ${loginAttemptId}):`, error);
       
       if (error.message?.includes('Email not confirmed') || error.code === 'email_not_confirmed') {
         setIsEmailNotConfirmed(true);
@@ -118,6 +129,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     {...field} 
                     className="input-focus-ring"
                     disabled={isDisabled}
+                    autoComplete="email"
                   />
                 </FormControl>
                 <FormMessage />
@@ -137,6 +149,7 @@ const LoginForm = ({ connectionStatus }: LoginFormProps) => {
                     {...field} 
                     className="input-focus-ring"
                     disabled={isDisabled}
+                    autoComplete="current-password"
                   />
                 </FormControl>
                 <FormMessage />

@@ -29,23 +29,32 @@ export interface TeacherProfile {
   designation?: string;
 }
 
-// Truly non-blocking connection check that returns immediately
+// Non-blocking connection check with proper error handling
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   // Always return true immediately to prevent UI blocking
   setTimeout(() => {
-    // Try a lightweight query in the background
-    Promise.resolve(
-      supabase.from('profiles').select('count').limit(1)
-    )
-      .then(({ error }) => {
-        if (error) {
-          console.warn('Background Supabase connection check failed:', error.message);
+    try {
+      // Use a wrapper function to make the background check more robust
+      const backgroundCheck = async () => {
+        try {
+          const { error } = await supabase.from('profiles').select('count').limit(1);
+          if (error) {
+            console.warn('Background Supabase connection check failed:', error.message);
+          }
+        } catch (e) {
+          // Silent fail to avoid errors blocking UI
+          console.warn('Background Supabase connection check threw an exception:', e);
         }
-      })
-      .catch(e => {
-        // Silent fail to avoid errors blocking UI
-        console.warn('Background Supabase connection check threw an exception:', e);
+      };
+      
+      // Execute background check with proper error handling
+      backgroundCheck().catch(e => {
+        console.warn('Failed to start background connection check:', e);
       });
+    } catch (e) {
+      // Extra safety net
+      console.warn('Error setting up background check:', e);
+    }
   }, 0);
   
   return true;

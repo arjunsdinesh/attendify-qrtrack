@@ -23,7 +23,7 @@ const AuthForm = () => {
   useEffect(() => {
     console.log(`AuthForm mounted (instance: ${formInstanceId}), checking connection...`);
     
-    // Always render as connected first
+    // Always render as connected first for faster UI display
     setConnectionStatus('connected');
     setIsLoading(false);
     
@@ -47,7 +47,12 @@ const AuthForm = () => {
     };
     
     // Attempt to clear any problematic data in a non-blocking way
-    setTimeout(clearStaleSessionData, 300);
+    setTimeout(clearStaleSessionData, 100);
+    
+    // Return function that gets called when component is unmounted
+    return () => {
+      console.log(`AuthForm unmounting (instance: ${formInstanceId})`);
+    };
   }, [retryCount, formInstanceId]);
 
   // Retry connection when disconnected
