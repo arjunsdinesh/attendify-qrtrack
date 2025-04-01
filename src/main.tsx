@@ -4,6 +4,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+// Make React available globally to prevent "Cannot read properties of null" errors with libraries
+window.React = React;
+
 // Generate a truly unique session ID with device timestamp to help debug multi-device issues
 const sessionId = `session_${Math.random().toString(36).substring(2, 9)}_${new Date().getTime().toString(36)}`;
 console.log(`Initializing application (session: ${sessionId})`);
@@ -65,3 +68,4 @@ if (!rootElement) {
 window.addEventListener('error', (event) => {
   console.error(`Global error caught (session: ${sessionId}):`, event.error);
 });
+

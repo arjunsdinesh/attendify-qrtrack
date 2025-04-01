@@ -125,9 +125,9 @@ const App = () => {
   console.log("Rendering App component");
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <BrowserRouter>
-          <AuthProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <React.StrictMode>
             <Toaster />
             <Sonner />
             <ErrorBoundary fallback={<ErrorFallback />}>
@@ -195,11 +195,12 @@ const App = () => {
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </ErrorBoundary>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
+          </React.StrictMode>
+        </AuthProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 };
 
 export default App;
+
