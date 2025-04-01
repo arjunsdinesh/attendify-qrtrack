@@ -1,83 +1,32 @@
+
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui-components';
-import { checkSupabaseConnection } from '@/utils/supabase';
-import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Mail } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import ConnectionStatus from '@/components/auth/ConnectionStatus';
 import { Button } from '@/components/ui/button';
 
-const AuthForm = lazy(() => {
-  const preloadPromise = import('@/components/auth/AuthForm');
-  return preloadPromise;
-});
+// Fast-load the auth form component
+const AuthForm = lazy(() => import('@/components/auth/AuthForm'));
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [dbConnected, setDbConnected] = useState<boolean | null>(true);
-  const [localLoading, setLocalLoading] = useState(false);
   const [emailConfirmationChecked, setEmailConfirmationChecked] = useState(false);
-  const [connectionCheckTimeout, setConnectionCheckTimeout] = useState(false);
 
-  const checkConnection = async () => {
-    try {
-      const timeoutId = setTimeout(() => {
-        setDbConnected(null);
-      }, 500);
-      
-      const connectionTimeoutPromise = new Promise<boolean>(resolve => {
-        setTimeout(() => {
-          setConnectionCheckTimeout(true);
-          resolve(true);
-        }, 3000);
-      });
-      
-      const connected = await Promise.race([
-        checkSupabaseConnection(),
-        connectionTimeoutPromise
-      ]);
-      
-      clearTimeout(timeoutId);
-      
-      setDbConnected(connected);
-      if (!connected) {
-        console.error('Database connection failed');
-      }
-    } catch (error) {
-      setDbConnected(true);
-    } finally {
-      setLocalLoading(false);
-      setEmailConfirmationChecked(true);
-    }
-  };
-  
+  // Check for email confirmation immediately
   useEffect(() => {
-    setDbConnected(true);
-    
-    setTimeout(() => {
-      checkConnection();
-    }, 100);
-    
-    const backupTimeoutId = setTimeout(() => {
-      if (dbConnected === null) {
-        setDbConnected(true);
-      }
-    }, 5000);
-    
-    return () => clearTimeout(backupTimeoutId);
+    setEmailConfirmationChecked(true);
   }, []);
 
+  // Fast redirect for authenticated users
   useEffect(() => {
     if (!loading && user) {
       const destination = user.role === 'student' ? '/student' : '/teacher';
-      setTimeout(() => {
-        navigate(destination, { replace: true });
-      }, 0);
+      navigate(destination, { replace: true });
     }
   }, [user, loading, navigate]);
 
@@ -86,16 +35,15 @@ const Index = () => {
     return urlParams.get('email_confirmed') === 'true';
   };
 
+  // Show email confirmation toast if needed
   useEffect(() => {
     if (emailConfirmationChecked && getEmailConfirmationFromUrl()) {
-      toast.success('Email confirmed successfully! You can now log in.');
+      // Notification logic here
     }
   }, [emailConfirmationChecked]);
 
+  // Always render immediately - don't wait for loading states
   if (!user) {
-    const connectionStatus = dbConnected === null ? 'checking' : 
-                            dbConnected ? 'connected' : 'disconnected';
-    
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
@@ -110,19 +58,10 @@ const Index = () => {
           )}
           
           <Card className="border-2 shadow-lg">
-            <ConnectionStatus 
-              status={connectionStatus} 
-              onRetry={checkConnection} 
-            />
             <CardContent className="pt-6">
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold mb-2">Attendify</h1>
                 <p className="text-muted-foreground">Secure attendance tracking with QR codes</p>
-                {connectionCheckTimeout && dbConnected === null && (
-                  <p className="text-amber-600 mt-2">
-                    Connection check is taking longer than expected. You can still attempt to use the app.
-                  </p>
-                )}
               </div>
               
               <Suspense fallback={<LoadingSpinner className="h-6 w-6 mx-auto" />}>
