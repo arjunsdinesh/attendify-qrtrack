@@ -68,4 +68,3 @@ if (!rootElement) {
 window.addEventListener('error', (event) => {
   console.error(`Global error caught (session: ${sessionId}):`, event.error);
 });
-
