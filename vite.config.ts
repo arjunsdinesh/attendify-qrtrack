@@ -16,8 +16,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react({
-      // Improve development performance
-      fastRefresh: true,
+      // Use valid options for react plugin
+      jsxRuntime: 'automatic',
     }),
     mode === 'development' &&
     componentTagger(),
