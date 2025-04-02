@@ -9,9 +9,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // Improve hot module replacement performance
+    hmr: {
+      overlay: false,
+    },
   },
   plugins: [
-    react(),
+    react({
+      // Improve development performance
+      fastRefresh: true,
+    }),
     mode === 'development' &&
     componentTagger(),
   ].filter(Boolean),
@@ -20,16 +27,15 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Optimize chunk loading
   build: {
-    // Optimize build for faster loading
-    target: 'esnext', 
+    target: 'esnext',
     minify: 'esbuild',
     cssMinify: true,
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Improved chunking strategy
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom')) {
               return 'vendor-react';
@@ -43,12 +49,10 @@ export default defineConfig(({ mode }) => ({
             return 'vendor';
           }
           
-          // Group pages
           if (id.includes('/src/pages/')) {
             return 'pages';
           }
           
-          // Group components
           if (id.includes('/src/components/')) {
             if (id.includes('/ui/')) {
               return 'ui-components';
@@ -59,11 +63,16 @@ export default defineConfig(({ mode }) => ({
       }
     }
   },
-  // Speed up dev server
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js'],
     esbuildOptions: {
       target: 'esnext',
-    }
+      // Improve module parsing performance
+      tsconfigRaw: '{"compilerOptions":{"importsNotUsedAsValues":"remove"}}',
+    },
+  },
+  // Improve CSS handling
+  css: {
+    devSourcemap: false,
   },
 }));
