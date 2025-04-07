@@ -1,6 +1,6 @@
+
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { ensureSessionActive } from '@/utils/sessionUtils';
 import { useQRCodeGenerator } from '@/hooks/useQRCodeGenerator';
 import { SessionStatus } from './SessionStatus';
 import { QRCodeDisplay } from './QRCodeDisplay';
@@ -19,30 +19,16 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
   const {
     qrValue,
     generating,
-    refreshingQR,
+    refreshing,
     error,
-    sessionActive,
+    sessionStatus,
     generateQRData,
     forceActivateSession
   } = useQRCodeGenerator({
     sessionId,
+    classId: '', // Add empty string as placeholder for classId (required by type)
     timeLeft
   });
-
-  // Setup session keep-alive ping
-  useEffect(() => {
-    if (!sessionId) return;
-    
-    const pingInterval = setInterval(async () => {
-      try {
-        await ensureSessionActive(sessionId);
-      } catch (error) {
-        console.error('Error in ping methods:', error);
-      }
-    }, 5000);
-    
-    return () => clearInterval(pingInterval);
-  }, [sessionId]);
 
   // Timer and initial QR generation
   useEffect(() => {
@@ -79,7 +65,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
     <div className="flex flex-col items-center space-y-4">
       <SessionStatus 
         error={error}
-        sessionActive={sessionActive}
+        sessionActive={sessionStatus}
         onRetry={forceActivateSession}
         generating={generating}
       />
@@ -99,7 +85,7 @@ export const QRGenerator = ({ sessionId, className, onEndSession }: QRGeneratorP
         onRefresh={handleRefresh}
         onEndSession={onEndSession}
         generating={generating}
-        refreshingQR={refreshingQR}
+        refreshingQR={refreshing}
       />
     </div>
   );
