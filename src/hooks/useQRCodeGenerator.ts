@@ -1,87 +1,87 @@
 
 import { useState, useCallback } from 'react';
-import { useSessionActivation } from './useSessionActivation';
+import { useSessionManagement } from './useSessionManagement';
 
 interface UseQRCodeGeneratorProps {
   sessionId: string;
+  classId: string;
   timeLeft: number;
 }
 
-interface UseQRCodeGeneratorReturn {
-  qrValue: string;
-  generating: boolean;
-  refreshingQR: boolean;
-  error: string | null;
-  lastQRGeneration: number;
-  sessionActive: boolean;
-  generateQRData: () => Promise<void>;
-  setError: (error: string | null) => void;
-  forceActivateSession: () => Promise<boolean>;
-}
-
-export const useQRCodeGenerator = ({ sessionId, timeLeft }: UseQRCodeGeneratorProps): UseQRCodeGeneratorReturn => {
+export const useQRCodeGenerator = ({ sessionId, classId, timeLeft }: UseQRCodeGeneratorProps) => {
   const [qrValue, setQrValue] = useState<string>('');
-  const [generating, setGenerating] = useState<boolean>(false);
-  const [refreshingQR, setRefreshingQR] = useState<boolean>(false);
-  const [lastQRGeneration, setLastQRGeneration] = useState<number>(Date.now());
-
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  
   const {
-    sessionActive,
+    sessionStatus,
+    generating,
     error,
     forceActivateSession,
+    checkSessionStatus,
     setError
-  } = useSessionActivation({ sessionId });
+  } = useSessionManagement({ sessionId });
 
-  // Generate QR data
+  // Generate QR code with enhanced session activation
   const generateQRData = useCallback(async () => {
-    if (qrValue && Date.now() - lastQRGeneration < 29500) {
-      return;
-    }
-    
-    if (refreshingQR || !sessionId) {
+    // Prevent multiple simultaneous generation attempts
+    if (refreshing) {
+      console.log('Already refreshing QR, skipping this request');
       return;
     }
     
     try {
-      setRefreshingQR(true);
-      setGenerating(true);
+      setRefreshing(true);
       setError(null);
       
-      // Check and activate session if needed
-      await forceActivateSession();
+      console.log('Generating QR code for session:', sessionId);
       
-      // Generate QR data
+      // Force session activation before generating QR
+      const isActive = await checkSessionStatus();
+      
+      if (!isActive) {
+        console.warn('Could not verify session active status');
+        const forcedActive = await forceActivateSession();
+        if (!forcedActive) {
+          throw new Error('Could not activate session');
+        }
+      }
+      
+      // Create the QR code data
       const timestamp = Date.now();
-      const expiresAt = timestamp + ((timeLeft + 5) * 1000);
+      const expiresAt = timestamp + (timeLeft * 1000);
       
       const qrData = {
         sessionId,
         timestamp,
         expiresAt,
-        isActive: true
+        isActive: true,
+        classId
       };
       
-      setQrValue(JSON.stringify(qrData));
-      setLastQRGeneration(timestamp);
+      console.log('QR data created:', {
+        sessionId: qrData.sessionId,
+        timestamp: qrData.timestamp,
+        expiresAt: qrData.expiresAt
+      });
       
-    } catch (error: any) {
+      setQrValue(JSON.stringify(qrData));
+      
+    } catch (error) {
       console.error('Error generating QR code:', error);
-      setError('Failed to generate QR code: ' + (error.message || 'Unknown error'));
+      setError('Failed to generate QR code');
     } finally {
-      setGenerating(false);
-      setRefreshingQR(false);
+      setRefreshing(false);
     }
-  }, [sessionId, timeLeft, forceActivateSession, refreshingQR, qrValue, lastQRGeneration, setError]);
+  }, [sessionId, classId, timeLeft, refreshing, checkSessionStatus, forceActivateSession, setError]);
 
   return {
     qrValue,
+    refreshing,
     generating,
-    refreshingQR,
     error,
-    lastQRGeneration,
-    sessionActive,
+    sessionStatus,
     generateQRData,
-    setError,
-    forceActivateSession
+    forceActivateSession,
+    checkSessionStatus
   };
 };
