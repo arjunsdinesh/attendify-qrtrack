@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -31,6 +32,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
   const [checkingActiveSession, setCheckingActiveSession] = useState<boolean>(true);
   const [initialLoadTimeout, setInitialLoadTimeout] = useState<boolean>(false);
 
+  // Set a timeout for initial load
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setInitialLoadTimeout(true);
@@ -40,6 +42,23 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     return () => clearTimeout(timeoutId);
   }, []);
 
+  // Get class name from class data
+  const getClassNameFromData = (data: any): string => {
+    if (!data?.classes) return 'Unknown Class';
+    
+    if (Array.isArray(data.classes)) {
+      const firstClass = data.classes[0] as ClassData | undefined;
+      return firstClass?.name || 'Unknown Class';
+    } 
+    
+    if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
+      return (data.classes as ClassData).name;
+    }
+    
+    return 'Unknown Class';
+  };
+
+  // Check for active session
   const checkForActiveSession = async () => {
     if (!userId) {
       setCheckingActiveSession(false);
@@ -65,37 +84,23 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       if (error) throw error;
       
       if (data) {
-        setSessionId(data?.id);
-        setClassId(data?.class_id);
-        
-        if (data?.classes) {
-          let classNameValue = 'Unknown Class';
-          
-          if (Array.isArray(data.classes)) {
-            const firstClass = data.classes[0] as ClassData | undefined;
-            classNameValue = firstClass?.name || 'Unknown Class';
-          } else if (typeof data.classes === 'object' && data.classes !== null && 'name' in data.classes) {
-            classNameValue = (data.classes as ClassData).name;
-          }
-          
-          setClassName(classNameValue);
-        } else {
-          setClassName('Unknown Class');
-        }
-        
+        setSessionId(data.id);
+        setClassId(data.class_id);
+        setClassName(getClassNameFromData(data));
         setActive(true);
 
         setTimeout(() => {
-          ensureSessionActive(data.id).catch(() => {
-          });
+          ensureSessionActive(data.id).catch(() => {});
         }, 0);
       }
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Error checking for active session:', error);
     } finally {
       setCheckingActiveSession(false);
     }
   };
 
+  // Initial check for active session
   useEffect(() => {
     if (userId) {
       setTimeout(() => {
@@ -106,6 +111,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     }
   }, [userId]);
 
+  // Fetch classes
   useEffect(() => {
     const fetchClasses = async () => {
       if (!userId) {
@@ -134,10 +140,11 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         if (preselectedClassId && data) {
           const selectedClass = data.find(c => c.id === preselectedClassId);
           if (selectedClass) {
-            setClassName(selectedClass?.name);
+            setClassName(selectedClass.name);
           }
         }
-      } catch (error: any) {
+      } catch (error) {
+        console.error('Error fetching classes:', error);
       } finally {
         setIsLoadingClasses(false);
       }
@@ -148,21 +155,18 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     }
   }, [userId, preselectedClassId]);
 
-  const generateSecret = () => {
+  // Generate a secure random secret
+  const generateSecret = (): string => {
     const array = new Uint32Array(4);
     crypto.getRandomValues(array);
     return Array.from(array, x => x.toString(16)).join('');
   };
 
+  // Start a new QR session
   const startQRGenerator = async (selectedClassId: string, selectedClassName: string) => {
     try {
-      if (!selectedClassId) {
-        toast.error('Please select a class');
-        return;
-      }
-      
-      if (!userId) {
-        toast.error('User authentication required');
+      if (!selectedClassId || !userId) {
+        toast.error(selectedClassId ? 'User authentication required' : 'Please select a class');
         return;
       }
       
@@ -170,29 +174,16 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       setClassId(selectedClassId);
       setClassName(selectedClassName);
       
-      const { error: deactivateError } = await supabase
+      // Deactivate any existing sessions
+      await supabase
         .from('attendance_sessions')
-        .update({ 
-          is_active: false, 
-          end_time: new Date().toISOString() 
-        })
+        .update({ is_active: false, end_time: new Date().toISOString() })
         .eq('created_by', userId)
         .eq('is_active', true);
-        
-      if (deactivateError) {
-        console.error('Error deactivating existing sessions:', deactivateError);
-      }
       
       const secret = generateSecret();
       
-      console.log('Creating new session with:', {
-        created_by: userId,
-        class_id: selectedClassId,
-        qr_secret: secret,
-        date: new Date().toISOString().split('T')[0],
-        is_active: true
-      });
-      
+      // Create new session
       const { data, error } = await supabase
         .from('attendance_sessions')
         .insert({
@@ -206,50 +197,22 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
         .select()
         .single();
       
-      if (error) {
-        console.error('Supabase insert error:', error);
-        throw error;
+      if (error || !data) {
+        throw error || new Error('No data returned from session creation');
       }
       
-      if (!data) {
-        throw new Error('No data returned from session creation');
-      }
-      
-      console.log('Session created successfully:', data);
-      
+      // Ensure session is active using multiple methods
       try {
-        await supabase.rpc('force_activate_session', {
-          session_id: data.id
-        });
-        
-        await forceSessionActivation(data.id);
-        
-        const { data: verifyData, error: verifyError } = await supabase
-          .from('attendance_sessions')
-          .select('id, is_active')
-          .eq('id', data.id)
-          .maybeSingle();
-          
-        if (verifyError) {
-          console.error('Error verifying session activation:', verifyError);
-        } else {
-          console.log('Session activation verified:', verifyData);
-          
-          if (verifyData && !verifyData.is_active) {
-            console.warn('Session not active after all activation attempts, trying direct update');
-            
-            await supabase
-              .from('attendance_sessions')
-              .update({ 
-                is_active: true,
-                end_time: null 
-              })
-              .eq('id', data.id);
-          }
-        }
+        await Promise.all([
+          supabase.rpc('force_activate_session', { session_id: data.id }),
+          forceSessionActivation(data.id),
+          supabase
+            .from('attendance_sessions')
+            .update({ is_active: true, end_time: null })
+            .eq('id', data.id)
+        ]);
       } catch (activationError) {
-        console.error('Error during activation verification:', activationError);
-        
+        console.error('Error during activation:', activationError);
         await supabase
           .from('attendance_sessions')
           .update({ is_active: true, end_time: null })
@@ -268,6 +231,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
     }
   };
 
+  // Stop the current QR session
   const stopQRGenerator = async () => {
     try {
       if (!sessionId) return;
@@ -276,10 +240,7 @@ export const SessionControls = ({ userId }: SessionControlsProps) => {
       
       const { error } = await supabase
         .from('attendance_sessions')
-        .update({ 
-          is_active: false, 
-          end_time: new Date().toISOString() 
-        })
+        .update({ is_active: false, end_time: new Date().toISOString() })
         .eq('id', sessionId as any);
       
       if (error) throw error;

@@ -3,15 +3,16 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { generateSessionId, cleanupStaleSessions } from './utils/session-tracker';
 
 // Make React available globally to prevent "Cannot read properties of null" errors with libraries
 window.React = React;
 
-// Generate a truly unique session ID with device timestamp to help debug multi-device issues
-const sessionId = `session_${Math.random().toString(36).substring(2, 9)}_${new Date().getTime().toString(36)}`;
+// Generate a unique session ID for debugging
+const sessionId = generateSessionId();
 console.log(`Initializing application (session: ${sessionId})`);
 
-// Get root element immediately without any delays
+// Initialize the app and render immediately
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
@@ -19,7 +20,7 @@ if (!rootElement) {
   document.body.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize application. The root element was not found.</div>';
 } else {
   try {
-    // Create root and render immediately without any delays
+    // Create root and render immediately
     const root = createRoot(rootElement);
     root.render(
       <React.StrictMode>
@@ -29,31 +30,8 @@ if (!rootElement) {
     
     console.log(`React application initialized successfully (session: ${sessionId})`);
     
-    // Clean up stale sessions in the background with a much shorter timeout
-    // Using setTimeout to ensure it doesn't block rendering
-    setTimeout(() => {
-      try {
-        // Multi-device safe cleanup - only clear token conflicts, not all auth
-        const keysToPreserve = ['supabase.auth.token'];
-        const currentTime = new Date().getTime();
-        const cleanupId = `cleanup_${Math.random().toString(36).substring(2, 9)}`;
-        
-        console.log(`Starting auth cleanup (cleanup: ${cleanupId}, session: ${sessionId})`);
-        
-        // Only remove stale items that are causing conflicts
-        Object.keys(localStorage).forEach(key => {
-          if (!keysToPreserve.includes(key) && key.includes('supabase.auth.') && key !== 'supabase.auth.token') {
-            console.log(`Removing stale auth item: ${key} (cleanup: ${cleanupId})`);
-            localStorage.removeItem(key);
-          }
-        });
-        
-        console.log(`Auth cleanup completed (cleanup: ${cleanupId}, session: ${sessionId}, time: ${new Date().getTime() - currentTime}ms)`);
-      } catch (e) {
-        // Ignore localStorage errors - don't let cleanup failures affect rendering
-        console.warn(`Auth cleanup failed (session: ${sessionId}):`, e);
-      }
-    }, 25); // Reduced from 50ms to 25ms for faster initialization
+    // Clean up stale sessions in the background
+    setTimeout(() => cleanupStaleSessions(sessionId), 25);
   } catch (error) {
     console.error(`Failed to initialize React (session: ${sessionId}):`, error);
     const errorDiv = document.createElement('div');

@@ -28,7 +28,7 @@ export const SessionForm = ({
 }: SessionFormProps) => {
   const [selectedClass, setSelectedClass] = useState<string>(selectedClassId);
 
-  // Update the selected class when the prop changes
+  // Update selected class when prop changes
   useEffect(() => {
     if (selectedClassId) {
       setSelectedClass(selectedClassId);
@@ -38,7 +38,6 @@ export const SessionForm = ({
   const handleSubmit = () => {
     if (!selectedClass) return;
     
-    // Find the class name for the selected ID
     const classObj = classes.find(c => c.id === selectedClass);
     if (!classObj) return;
     
